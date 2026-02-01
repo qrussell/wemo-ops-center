@@ -4,6 +4,10 @@ import threading
 import time
 from tkinter import messagebox
 import pyperclip  # pip install pyperclip
+import base64
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import padding
 
 # --- THEME SETUP ---
 ctk.set_appearance_mode("Dark")
@@ -14,7 +18,7 @@ class WemoOpsApp(ctk.CTk):
         super().__init__()
 
         # --- Window Config ---
-        self.title("Wemo Ops Center | HomeKit Extractor Edition")
+        self.title("Wemo Ops Center | Network Engineer Edition")
         self.geometry("950x700")
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
@@ -46,6 +50,8 @@ class WemoOpsApp(ctk.CTk):
         self.create_manual_add()
 
         self.show_tab("dash")
+        
+        # Auto-scan on launch
         self.refresh_network()
 
     # ---------------------------------------------------------
@@ -164,36 +170,90 @@ class WemoOpsApp(ctk.CTk):
         bot.pack(fill="x", padx=10, pady=(0, 10))
         ctk.CTkLabel(bot, text=info_text, font=("Consolas", 11), text_color="#aaa").pack(side="left", padx=10, pady=5)
         
-        # --- NEW: Extract HomeKit Code Button ---
+        # EXTRACT HOMEKIT BUTTON
         def extract_hk():
             threading.Thread(target=self._extract_hk_task, args=(dev,), daemon=True).start()
 
         ctk.CTkButton(bot, text="Get HomeKit Code", width=120, height=20, font=("Arial", 10), 
                       fg_color="#555", hover_color="#666", command=extract_hk).pack(side="right", padx=5)
 
+    def toggle_device(self, dev):
+        def _t(): dev.toggle()
+        threading.Thread(target=_t, daemon=True).start()
+
+    # ---------------------------------------------------------
+    # HOMEKIT DECRYPTION LOGIC (Native Python)
+    # ---------------------------------------------------------
     def _extract_hk_task(self, dev):
-        # The secret sauce: Querying the BasicEvent service
         try:
             if hasattr(dev, 'basicevent'):
-                # This specific action is supported on some V2/V3 firmware
-                data = dev.basicevent.GetHKSetupInfo()
-                code = data.get('HKSetupCode')
-                
+                # Try to get the raw data
+                # Note: On some devices this returns cleartext, on others encrypted.
+                # Standard pywemo might not expose the raw XML, so we check what we get.
+                try:
+                    data = dev.basicevent.GetHKSetupInfo()
+                    code = data.get('HKSetupCode')
+                except Exception as e:
+                    # If the simple method fails, we might need a lower-level UPnP call
+                    # For this example, we assume pywemo handles the SOAP call.
+                    self.after(0, lambda: messagebox.showwarning("Error", f"UPnP Query Failed: {e}"))
+                    return
+
                 if code:
-                    self.after(0, lambda: messagebox.showinfo("Success", f"HomeKit Code Found:\n\n{code}"))
-                    pyperclip.copy(code)
+                    # If it looks like a valid code (XXX-XX-XXX), display it
+                    if len(code) == 10 and code[3] == '-' and code[6] == '-':
+                        self.after(0, lambda: messagebox.showinfo("Success", f"HomeKit Code Found:\n\n{code}"))
+                        pyperclip.copy(code)
+                    else:
+                        # If not, it might be base64 encrypted. Try to decrypt.
+                        # This part replaces the 'openssl' command.
+                        decrypted = self.decrypt_wemo_payload(code, dev.serialnumber)
+                        if decrypted:
+                            self.after(0, lambda: messagebox.showinfo("Decrypted", f"HomeKit Code:\n\n{decrypted}"))
+                            pyperclip.copy(decrypted)
+                        else:
+                            self.after(0, lambda: messagebox.showwarning("Failed", "Got data, but could not decrypt it.\nCode might be static on sticker."))
                 else:
                     self.after(0, lambda: messagebox.showwarning("Not Found", "Device returned empty HomeKit data."))
             else:
                 self.after(0, lambda: messagebox.showerror("Error", "Device does not support BasicEvent service."))
         except Exception as e:
-             self.after(0, lambda: messagebox.showerror("Failed", f"Could not retrieve HomeKit code.\n\nLikely unsupported firmware.\nError: {e}"))
+             self.after(0, lambda: messagebox.showerror("Failed", f"Error: {e}"))
 
-    def toggle_device(self, dev):
-        def _t(): dev.toggle()
-        threading.Thread(target=_t, daemon=True).start()
+    def decrypt_wemo_payload(self, b64_data, serial):
+        """
+        Replaces external openssl command.
+        Attempts to decrypt Wemo blobs using common AES-128-CBC logic.
+        """
+        try:
+            # Wemo decryption keys often derive from serial or are static.
+            # This is a generic implementation of the AES-128-CBC used by Wemo.
+            # NOTE: Without the exact proprietary key logic (which varies by model),
+            # this is a "best effort" attempt using the serial as a key seed.
+            
+            encrypted_bytes = base64.b64decode(b64_data)
+            
+            # Key generation strategy (Generic Wemo Style)
+            # You might need to adjust 'key' if you find specific keys for your model.
+            key = serial.ljust(16, '0')[:16].encode('utf-8')
+            iv = b'\x00' * 16 # Standard IV for many simple IoT implementations
+            
+            cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+            decryptor = cipher.decryptor()
+            
+            padded_data = decryptor.update(encrypted_bytes) + decryptor.finalize()
+            
+            # Remove PKCS7 padding
+            unpadder = padding.PKCS7(128).unpadder()
+            data = unpadder.update(padded_data) + unpadder.finalize()
+            
+            return data.decode('utf-8')
+        except Exception:
+            return None
 
-    # --- PROVISIONING ---
+    # ---------------------------------------------------------
+    # PROVISIONING LOGIC
+    # ---------------------------------------------------------
     def run_provision_thread(self):
         ssid = self.ssid_entry.get()
         pwd = self.pass_entry.get()
