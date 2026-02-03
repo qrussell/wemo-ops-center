@@ -9,20 +9,16 @@ import json
 from tkinter import messagebox
 import pyperclip
 import requests
-import platform
 
 # --- CONFIGURATION ---
-VERSION = "v3.0 (macOS)"
+VERSION = "v3.1"
 
-# --- PATH SETUP (Mac Style) ---
-# Uses the standard Mac Application Support folder
-HOME = os.path.expanduser("~")
-APP_DATA_DIR = os.path.join(HOME, "Library", "Application Support", "WemoOps")
-
+# --- PATH SETUP (MACOS ADAPTED) ---
+# Uses standard Mac Application Support folder
+APP_DATA_DIR = os.path.expanduser("~/Library/Application Support/WemoOps")
 if not os.path.exists(APP_DATA_DIR):
     try: os.makedirs(APP_DATA_DIR)
     except: pass
-    
 PROFILE_FILE = os.path.join(APP_DATA_DIR, "wifi_profiles.json")
 
 # --- PYINSTALLER RESOURCE PATH FIX ---
@@ -36,7 +32,7 @@ class WemoOpsApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title(f"Wemo Ops Center {VERSION}")
+        self.title(f"Wemo Ops Center {VERSION} | Production (macOS)")
         self.geometry("1100x800") 
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
@@ -59,7 +55,7 @@ class WemoOpsApp(ctk.CTk):
                                       command=lambda: self.show_tab("prov"))
         self.btn_prov.pack(pady=5, padx=10, fill="x")
         
-        ctk.CTkLabel(self.sidebar, text=f"{VERSION}", text_color="gray", font=("Arial", 10)).pack(side="bottom", pady=10)
+        ctk.CTkLabel(self.sidebar, text=f"{VERSION} Stable", text_color="gray", font=("Arial", 10)).pack(side="bottom", pady=10)
 
         # --- Main Area ---
         self.main_area = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
@@ -85,7 +81,7 @@ class WemoOpsApp(ctk.CTk):
         
         head = ctk.CTkFrame(frame, fg_color="transparent")
         head.pack(fill="x", pady=(0, 20))
-        ctk.CTkLabel(head, text="Network Overview", font=("Arial", 24, "bold")).pack(side="left")
+        ctk.CTkLabel(head, text="Network Overview", font=("Roboto", 24)).pack(side="left")
         
         manual_frame = ctk.CTkFrame(frame, fg_color="#222")
         manual_frame.pack(fill="x", pady=(0, 10))
@@ -146,6 +142,7 @@ class WemoOpsApp(ctk.CTk):
         self.pass_entry = ctk.CTkEntry(input_frame, placeholder_text="Password", show="*")
         self.pass_entry.pack(fill="x", pady=5)
 
+        # 3. Action Button
         self.prov_btn = ctk.CTkButton(left_col, text="Push Configuration", fg_color="#28a745", hover_color="#1e7e34", 
                                       height=50, state="disabled", command=self.run_provision_thread)
         self.prov_btn.pack(fill="x", pady=20)
@@ -180,50 +177,96 @@ class WemoOpsApp(ctk.CTk):
         self.prov_log.pack(fill="both", expand=True)
 
     # ---------------------------------------------------------
-    # SCANNER (MAC SPECIFIC)
+    # PROVISIONING (V3.1 SMART LOOP)
     # ---------------------------------------------------------
-    def scan_ssids(self):
-        for w in self.ssid_list.winfo_children(): w.destroy()
-        lbl = ctk.CTkLabel(self.ssid_list, text="Scanning...", text_color="yellow")
-        lbl.pack()
-        threading.Thread(target=self._scan_thread_logic, args=(lbl,), daemon=True).start()
-
-    def _scan_thread_logic(self, status_lbl):
-        wemos = []
-        airport_path = "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport"
+    def run_provision_thread(self):
+        ssid = self.ssid_entry.get()
+        pwd = self.pass_entry.get()
+        name = self.name_entry.get()
         
-        if not os.path.exists(airport_path):
-             self.after(0, lambda: ctk.CTkLabel(self.ssid_list, text="Error: 'airport' tool not found.", text_color="#ff5555").pack())
-             return
+        if not ssid: 
+            messagebox.showwarning("Missing Data", "Enter SSID.")
+            return
+        
+        target_ip = self.current_setup_ip or "10.22.22.1"
+        target_port = self.current_setup_port 
+        
+        self.prov_btn.configure(state="disabled", text="Running...")
+        self.prov_log.delete("1.0", "end")
+        
+        threading.Thread(target=self._provision_task, args=(ssid, pwd, name, target_ip, target_port), daemon=True).start()
 
+    def _provision_task(self, ssid, pwd, friendly_name, ip_address, port):
+        self.log_prov(f"--- Configuring Device at {ip_address} ---")
         try:
-            # Mac command to scan
-            cmd = [airport_path, "-s"]
-            output = subprocess.check_output(cmd).decode('utf-8', errors='ignore')
+            # 1. Resolve URL
+            if port:
+                url = f"http://{ip_address}:{port}/setup.xml"
+            else:
+                url = pywemo.setup_url_for_address(ip_address)
             
-            # Parse Mac Output
-            for line in output.split('\n'):
-                line = line.strip()
-                # Mac output is usually SSID BSSID RSSI...
-                # We just need to find the SSID part.
-                if "wemo" in line.lower() or "belkin" in line.lower():
-                     # Simple extraction: split by space, take first part if it looks like a Wemo
-                     # A more robust way is getting the substring, but Wemo SSIDs are usually contiguous
-                     parts = line.split()
-                     if parts:
-                         wemos.append(parts[0]) 
+            self.log_prov(f"Targeting URL: {url}")
+            dev = pywemo.discovery.device_from_description(url)
+            
+            # 2. Set Name First
+            if friendly_name and hasattr(dev, 'basicevent'):
+                self.log_prov(f"Setting Name to: {friendly_name}")
+                dev.basicevent.ChangeFriendlyName(FriendlyName=friendly_name)
+                time.sleep(1) 
 
+            # 3. Execute Auto Provisioning (Smart Loop)
+            self.log_prov("Starting Adaptive Encryption Loop...")
+            self._brute_force_provision(dev, ssid, pwd)
+
+            self.log_prov("SUCCESS: Configuration Sent!")
+            self.log_prov("Device is rebooting. Connect Mac back to Home Wi-Fi.")
         except Exception as e:
-            print(e)
-            pass
+            self.log_prov(f"Error: {e}")
+
+        self.prov_btn.configure(state="normal", text="Push Configuration")
+
+    def _brute_force_provision(self, dev, ssid, pwd):
+        """
+        v3.1 Core Logic: Iterates through all encryption combinations using 
+        internal _encrypt_method to bypass 'unexpected keyword' errors.
+        """
+        # Order: Method 2 (AES/OpenSSL), Method 1 (ARC4), Method 0 (None)
+        enc_modes = [2, 1, 0]
+        # Order: True (Most common for new FW), False (Old FW)
+        len_opts = [True, False]
+
+        for mode in enc_modes:
+            for length in len_opts:
+                try:
+                    self.log_prov(f"Attempting: Method {mode}, Len={length}...")
+                    
+                    # Try using internal arguments first (safest for Bleeding Edge)
+                    dev.setup(ssid=ssid, password=pwd, _encrypt_method=mode, _add_password_lengths=length)
+                    
+                    self.log_prov(f"  > Accepted! (Method {mode}, Len {length})")
+                    return # Exit on success
+
+                except TypeError:
+                    # Fallback for standard/older pywemo versions
+                    self.log_prov("  > Library Mismatch: '_encrypt_method' missing.")
+                    self.log_prov("  > Fallback: Attempting Legacy Standard Setup...")
+                    try:
+                        dev.setup(ssid=ssid, password=pwd)
+                        self.log_prov("  > Legacy Setup Accepted!")
+                        return
+                    except Exception as e:
+                        self.log_prov(f"  > Legacy Setup Failed: {e}")
+                        time.sleep(1)
+                        continue
+
+                except Exception as e:
+                    self.log_prov(f"  > Failed: {str(e)}")
+                    time.sleep(0.5)
         
-        status_lbl.destroy()
-        if wemos:
-            for ssid in list(set(wemos)): self.after(0, lambda s=ssid: self.build_ssid_card(s))
-        else: self.after(0, lambda: ctk.CTkLabel(self.ssid_list, text="No Wemo networks found.", text_color="#ff5555").pack())
+        raise Exception("All provisioning attempts failed.")
 
     # ---------------------------------------------------------
-    # REST OF LOGIC (IDENTICAL TO WINDOWS)
+    # UTILITY METHODS
     # ---------------------------------------------------------
     def load_profiles(self):
         if os.path.exists(PROFILE_FILE):
@@ -238,7 +281,6 @@ class WemoOpsApp(ctk.CTk):
         if not ssid or not pwd:
             messagebox.showwarning("Error", "Enter SSID and Password first.")
             return
-        
         try:
             self.profiles[ssid] = pwd
             with open(PROFILE_FILE, 'w') as f: json.dump(self.profiles, f)
@@ -283,12 +325,10 @@ class WemoOpsApp(ctk.CTk):
     def _connection_monitor(self):
         target_ips = ["10.22.22.1", "192.168.49.1", "192.168.1.1"]
         target_ports = [49152, 49153, 49154, 49155, 49151] 
-        
         while self.monitoring:
             found_dev = None
             found_ip = None
             found_port = None
-            
             for ip in target_ips:
                 for port in target_ports:
                     try:
@@ -301,7 +341,6 @@ class WemoOpsApp(ctk.CTk):
                             break
                     except: pass
                 if found_dev: break
-            
             if found_dev: 
                 self.current_setup_ip = found_ip
                 self.current_setup_port = found_port
@@ -309,7 +348,6 @@ class WemoOpsApp(ctk.CTk):
             else: 
                 self.current_setup_ip = None
                 self.after(0, self.set_status_disconnected)
-            
             time.sleep(3)
 
     def set_status_connected(self, dev, ip, port):
@@ -337,51 +375,39 @@ class WemoOpsApp(ctk.CTk):
         self.current_setup_ip = "10.22.22.1"
         self.log_prov("Manual Override engaged. Assuming IP 10.22.22.1.")
 
+    def scan_ssids(self):
+        for w in self.ssid_list.winfo_children(): w.destroy()
+        lbl = ctk.CTkLabel(self.ssid_list, text="Scanning...", text_color="yellow")
+        lbl.pack()
+        threading.Thread(target=self._scan_thread_logic, args=(lbl,), daemon=True).start()
+
+    def _scan_thread_logic(self, status_lbl):
+        wemos = []
+        # Uses standard macOS airport utility path
+        airport_path = "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport"
+        if os.path.exists(airport_path):
+            try:
+                # -s scans for available networks
+                output = subprocess.check_output([airport_path, "-s"]).decode('utf-8', errors='ignore')
+                for line in output.split('\n'):
+                    # SSID is typically the first part of the string in 'airport -s' output
+                    if "wemo" in line.lower() or "belkin" in line.lower():
+                        # Extract the SSID (first 32 chars roughly contain it)
+                        ssid_part = line[:32].strip()
+                        if ssid_part:
+                            wemos.append(ssid_part)
+            except: pass
+        
+        status_lbl.destroy()
+        if wemos:
+            for ssid in list(set(wemos)): self.after(0, lambda s=ssid: self.build_ssid_card(s))
+        else: self.after(0, lambda: ctk.CTkLabel(self.ssid_list, text="No Wemo networks found.", text_color="#ff5555").pack())
+
     def build_ssid_card(self, ssid):
         card = ctk.CTkFrame(self.ssid_list, fg_color="#333")
         card.pack(fill="x", pady=2, padx=5)
         ctk.CTkLabel(card, text=ssid, font=("Arial", 12, "bold")).pack(side="left", padx=10)
         ctk.CTkLabel(card, text="⬅ Connect Manually", text_color="#aaa", font=("Arial", 10)).pack(side="right", padx=10)
-
-    def run_provision_thread(self):
-        ssid = self.ssid_entry.get()
-        pwd = self.pass_entry.get()
-        name = self.name_entry.get()
-        if not ssid: 
-            messagebox.showwarning("Missing Data", "Enter SSID.")
-            return
-        
-        target_ip = self.current_setup_ip or "10.22.22.1"
-        target_port = self.current_setup_port 
-        
-        self.prov_btn.configure(state="disabled", text="Running...")
-        self.prov_log.delete("1.0", "end")
-        threading.Thread(target=self._provision_task, args=(ssid, pwd, name, target_ip, target_port), daemon=True).start()
-
-    def _provision_task(self, ssid, pwd, friendly_name, ip_address, port):
-        self.log_prov(f"--- Configuring Device at {ip_address} ---")
-        try:
-            if port:
-                url = f"http://{ip_address}:{port}/setup.xml"
-            else:
-                url = pywemo.setup_url_for_address(ip_address)
-            
-            self.log_prov(f"Targeting URL: {url}")
-            dev = pywemo.discovery.device_from_description(url)
-            
-            if friendly_name and hasattr(dev, 'basicevent'):
-                dev.basicevent.ChangeFriendlyName(FriendlyName=friendly_name)
-                self.log_prov("Name updated.")
-
-            self.log_prov("Sending Credentials...")
-            dev.setup(ssid=ssid, password=pwd)
-                 
-            self.log_prov("SUCCESS: Configuration Sent!")
-            self.log_prov("Device is rebooting. Connect Mac back to Home Wi-Fi.")
-        except Exception as e:
-            self.log_prov(f"Error: {e}")
-
-        self.prov_btn.configure(state="normal", text="Push Configuration")
 
     def manual_add_device(self):
         ip = self.ip_entry.get()
@@ -421,35 +447,28 @@ class WemoOpsApp(ctk.CTk):
         except: serial = "Unknown"
         try: fw = getattr(dev, 'firmware_version', "Unknown")
         except: fw = "Unknown"
-        
         card = ctk.CTkFrame(self.dev_list, fg_color="#1a1a1a")
         card.pack(fill="x", pady=5, padx=5)
-        
         top = ctk.CTkFrame(card, fg_color="transparent")
         top.pack(fill="x", padx=10, pady=(10, 5))
         ctk.CTkLabel(top, text="⚡", font=("Arial", 20)).pack(side="left", padx=(0,10))
         ctk.CTkLabel(top, text=f"{dev.name}", font=("Roboto", 16, "bold")).pack(side="left")
-        
         def toggle(): threading.Thread(target=dev.toggle, daemon=True).start()
         switch = ctk.CTkSwitch(top, text="Power", command=toggle)
         switch.pack(side="right")
         try: 
             if dev.get_state(): switch.select()
         except: pass
-
         mid = ctk.CTkFrame(card, fg_color="transparent")
         mid.pack(fill="x", padx=10, pady=0)
         meta_str = f"IP: {dev.host} | MAC: {mac} | SN: {serial} | FW: {fw}"
         ctk.CTkLabel(mid, text=meta_str, font=("Consolas", 11), text_color="#aaa").pack(anchor="w")
-
         bot = ctk.CTkFrame(card, fg_color="transparent")
         bot.pack(fill="x", padx=10, pady=(5, 10))
-
         def rename_action():
             new_name = ctk.CTkInputDialog(text="Name:", title="Rename").get_input()
             if new_name: threading.Thread(target=self._rename_task, args=(dev, new_name), daemon=True).start()
         ctk.CTkButton(bot, text="✎ Rename", width=80, height=24, fg_color="#444", command=rename_action).pack(side="left", padx=(0, 10))
-        
         def extract_hk(): threading.Thread(target=self._extract_hk_task, args=(dev,), daemon=True).start()
         ctk.CTkButton(bot, text="Get HomeKit Code", width=120, height=24, fg_color="#555", command=extract_hk).pack(side="left")
 
