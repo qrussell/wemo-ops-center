@@ -15,7 +15,7 @@ from tkinter import messagebox
 import pyperclip
 
 # --- CONFIGURATION ---
-VERSION = "v4.1.6 (Subnet Lists & Fixes)"
+VERSION = "v4.1.6"
 
 # --- PATH SETUP (Cross-Platform) ---
 if sys.platform == "darwin":
