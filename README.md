@@ -75,3 +75,5 @@ Advanced tools to manage device health directly from the app:
 * **Solar Engine:** Automatically detects your latitude/longitude to trigger lights at **Sunrise** or **Sunset**.
 * **Fixed Schedules:** Set standard time-based schedules (e.g., "Turn ON at 18:00").
 
+### ⚠️ Disclaimer
+This project is an independent open-source tool and is not affiliated with, endorsed by, or associated with Belkin International, Inc. "Wemo" is a trademark of Belkin International, Inc.
