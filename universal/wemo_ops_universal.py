@@ -32,7 +32,12 @@ if not os.path.exists(APP_DATA_DIR):
 PROFILE_FILE = os.path.join(APP_DATA_DIR, "wifi_profiles.json")
 SCHEDULE_FILE = os.path.join(APP_DATA_DIR, "schedules.json")
 SETTINGS_FILE = os.path.join(APP_DATA_DIR, "settings.json")
-SERVICE_EXE_PATH = os.path.join(APP_DATA_DIR, "wemo_service.exe")
+
+# Determine binary name based on OS
+if sys.platform == "win32":
+    SERVICE_EXE_PATH = os.path.join(APP_DATA_DIR, "wemo_service.exe")
+else:
+    SERVICE_EXE_PATH = os.path.join(APP_DATA_DIR, "wemo_service")
 
 # --- PYINSTALLER FIX ---
 if getattr(sys, 'frozen', False):
