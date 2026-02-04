@@ -15,7 +15,7 @@ from tkinter import messagebox
 import pyperclip
 
 # --- CONFIGURATION ---
-VERSION = "v4.0.3 (Cross-VLAN Edition)"
+VERSION = "v4.1.0 (Service Control)"
 
 # --- PATH SETUP (Cross-Platform) ---
 if sys.platform == "darwin":
@@ -32,6 +32,7 @@ if not os.path.exists(APP_DATA_DIR):
 PROFILE_FILE = os.path.join(APP_DATA_DIR, "wifi_profiles.json")
 SCHEDULE_FILE = os.path.join(APP_DATA_DIR, "schedules.json")
 SETTINGS_FILE = os.path.join(APP_DATA_DIR, "settings.json")
+SERVICE_EXE_PATH = os.path.join(APP_DATA_DIR, "wemo_service.exe")
 
 # --- PYINSTALLER FIX ---
 if getattr(sys, 'frozen', False):
@@ -46,7 +47,6 @@ ctk.set_default_color_theme("dark-blue")
 class NetworkUtils:
     @staticmethod
     def get_local_ip():
-        """Reliable cross-platform way to get the local interface IP."""
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.connect(("8.8.8.8", 80))
@@ -57,44 +57,29 @@ class NetworkUtils:
 
     @staticmethod
     def get_subnet_cidr():
-        """Detects subnet based on OS."""
         try:
-            # --- LINUX ---
             if sys.platform.startswith("linux"):
                 cmd = "ip -o -f inet addr show | awk '/scope global/ {print $4}'"
                 output = subprocess.check_output(cmd, shell=True).decode().strip()
                 return output.split('\n')[0]
-
-            # --- MACOS ---
             elif sys.platform == "darwin":
                 local_ip = NetworkUtils.get_local_ip()
-                # Simple fallback for Mac
                 return f"{local_ip}/24"
-
-            # --- WINDOWS ---
             elif sys.platform == "win32":
                 local_ip = NetworkUtils.get_local_ip()
-                # Defaults to /24 relative to local IP
                 return f"{local_ip}/24"
-
         except: pass
-        
-        # Fallback
         ip = NetworkUtils.get_local_ip()
         return f"{ip}/24"
 
     @staticmethod
     def scan_wifi_networks():
-        """Returns list of SSIDs based on OS."""
         wemos = []
         try:
-            # --- LINUX (nmcli) ---
             if sys.platform.startswith("linux"):
                 output = subprocess.check_output("nmcli -t -f SSID dev wifi", shell=True).decode('utf-8', errors='ignore')
                 for line in output.split('\n'):
                     if line.strip(): wemos.append(line.strip())
-
-            # --- MACOS (airport) ---
             elif sys.platform == "darwin":
                 airport_path = "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport"
                 if os.path.exists(airport_path):
@@ -103,8 +88,6 @@ class NetworkUtils:
                     for line in lines:
                         parts = line.strip().split()
                         if parts: wemos.append(parts[0])
-
-            # --- WINDOWS (netsh) ---
             elif sys.platform == "win32":
                 si = subprocess.STARTUPINFO()
                 si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
@@ -114,11 +97,42 @@ class NetworkUtils:
                     if line.startswith("SSID"):
                         ssid = line.split(":", 1)[1].strip()
                         if ssid: wemos.append(ssid)
-
         except Exception as e: 
             print(f"Wifi Scan Error: {e}")
-            
         return [ssid for ssid in list(set(wemos)) if "wemo" in ssid.lower() or "belkin" in ssid.lower()]
+
+# ==============================================================================
+#  SERVICE MANAGER (NEW)
+# ==============================================================================
+class ServiceManager:
+    @staticmethod
+    def is_running():
+        """Checks if wemo_service is running."""
+        try:
+            if sys.platform == "win32":
+                # Check for the specific EXE name
+                output = subprocess.check_output('tasklist /FI "IMAGENAME eq wemo_service.exe"', shell=True).decode()
+                return "wemo_service.exe" in output
+            else:
+                # Linux/Mac check
+                try:
+                    subprocess.check_output('pgrep -f "wemo_service"', shell=True)
+                    return True
+                except: return False
+        except: return False
+
+    @staticmethod
+    def start_service():
+        """Attempts to launch the service executable."""
+        if os.path.exists(SERVICE_EXE_PATH):
+            try:
+                if sys.platform == "win32":
+                    subprocess.Popen([SERVICE_EXE_PATH], creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP)
+                else:
+                    subprocess.Popen([SERVICE_EXE_PATH], shell=True)
+                return True
+            except: pass
+        return False
 
 # ==============================================================================
 #  DEEP SCANNER
@@ -133,15 +147,11 @@ class DeepScanner:
             return str(ip)
         except: return None
 
-    # FIX: Added 'target_cidr' parameter to allow manual overrides
     def scan_subnet(self, target_cidr=None, status_callback=None):
         found_devices = []
-        
-        # Use manual input if provided, otherwise auto-detect
         cidr = target_cidr if target_cidr else NetworkUtils.get_subnet_cidr()
         
         if status_callback: status_callback(f"Scanning Subnet: {cidr}")
-        
         try:
             network = ipaddress.ip_network(cidr, strict=False)
             hosts = list(network.hosts())
@@ -171,11 +181,10 @@ class DeepScanner:
         except Exception as e:
             print(f"Scan Error: {e}")
             if status_callback: status_callback(f"Invalid Subnet: {cidr}")
-
         return found_devices
 
 # ==============================================================================
-#  SOLAR ENGINE (Unchanged)
+#  SOLAR ENGINE
 # ==============================================================================
 class SolarEngine:
     def __init__(self):
@@ -249,17 +258,17 @@ class WemoOpsApp(ctk.CTk):
             self.solar.lat = self.settings["lat"]
             self.solar.lng = self.settings["lng"]
 
-        # Sidebar
+        # --- SIDEBAR ---
         self.sidebar = ctk.CTkFrame(self, width=200, corner_radius=0)
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         self.logo = ctk.CTkLabel(self.sidebar, text="WEMO OPS", font=("Arial Black", 20))
         self.logo.pack(pady=20)
         
-        # --- ICON SETUP ---
+        # Icon Logic
         if getattr(sys, 'frozen', False):
-            icon_path = os.path.join(sys._MEIPASS, "icon.ico")
+            icon_path = os.path.join(sys._MEIPASS, "app_icon.ico")
         else:
-            icon_path = "icon.ico"
+            icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images", "app_icon.ico")
         if sys.platform.startswith("win"):
             try: self.iconbitmap(icon_path)
             except: pass
@@ -267,7 +276,24 @@ class WemoOpsApp(ctk.CTk):
         self.btn_dash = self.create_nav_btn("Dashboard", "dash")
         self.btn_prov = self.create_nav_btn("Provisioner", "prov")
         self.btn_sched = self.create_nav_btn("Automation", "sched")
-        ctk.CTkLabel(self.sidebar, text=f"{VERSION}", text_color="gray", font=("Arial", 10)).pack(side="bottom", pady=10)
+
+        # --- NEW: SERVICE CONTROL ---
+        self.service_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        self.service_frame.pack(side="bottom", fill="x", pady=20, padx=10)
+        
+        self.svc_lbl = ctk.CTkLabel(self.service_frame, text="Service Status:", font=("Arial", 12, "bold"))
+        self.svc_lbl.pack(anchor="w")
+        
+        self.svc_status = ctk.CTkLabel(self.service_frame, text="Checking...", text_color="gray")
+        self.svc_status.pack(anchor="w")
+
+        self.svc_btn = ctk.CTkButton(self.service_frame, text="▶ Start Service", 
+                                     fg_color="#28a745", hover_color="#1e7e34", height=24,
+                                     command=self.start_service_manually)
+        # Button starts hidden
+        self.svc_btn.pack_forget()
+
+        ctk.CTkLabel(self.sidebar, text=f"{VERSION}", text_color="gray", font=("Arial", 10)).pack(side="bottom", pady=5)
 
         # Main Area
         self.main_area = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
@@ -279,13 +305,37 @@ class WemoOpsApp(ctk.CTk):
         self.create_schedule_ui()
 
         self.show_tab("dash")
-        
-        # We delay the initial scan slightly to let UI render
         self.after(500, self.refresh_network)
         
         self.monitoring = True
         threading.Thread(target=self._connection_monitor, daemon=True).start()
         threading.Thread(target=self._scheduler_engine, daemon=True).start()
+        
+        # Start Service Monitoring Loop
+        self.check_service_loop()
+
+    # --- SERVICE CONTROL METHODS ---
+    def check_service_loop(self):
+        is_running = ServiceManager.is_running()
+        
+        if is_running:
+            self.svc_status.configure(text="✅ RUNNING", text_color="#28a745")
+            self.svc_btn.pack_forget() # Hide start button if running
+        else:
+            self.svc_status.configure(text="❌ STOPPED", text_color="#ff5555")
+            self.svc_btn.pack(fill="x", pady=(5,0)) # Show start button
+            
+        self.after(3000, self.check_service_loop) # Check every 3 seconds
+
+    def start_service_manually(self):
+        self.svc_btn.configure(state="disabled", text="Starting...")
+        success = ServiceManager.start_service()
+        if success:
+            self.svc_status.configure(text="⏳ STARTING...", text_color="orange")
+            # Loop will pick up the running state shortly
+        else:
+            messagebox.showerror("Error", f"Could not find service executable at:\n{SERVICE_EXE_PATH}\n\nIs the app installed properly?")
+            self.svc_btn.configure(state="normal", text="▶ Start Service")
 
     def create_nav_btn(self, text, view_name):
         btn = ctk.CTkButton(self.sidebar, text=f"  {text}", anchor="w", command=lambda: self.show_tab(view_name))
@@ -311,14 +361,11 @@ class WemoOpsApp(ctk.CTk):
         head.pack(fill="x", pady=(0, 20))
         ctk.CTkLabel(head, text="Network Overview", font=("Roboto", 24)).pack(side="left")
 
-        # --- NEW: SCANNER CONTROLS ---
         scan_ctrl = ctk.CTkFrame(head, fg_color="transparent")
         scan_ctrl.pack(side="right")
         
-        # Subnet Entry
         self.subnet_entry = ctk.CTkEntry(scan_ctrl, width=140, placeholder_text="192.168.1.0/24")
         self.subnet_entry.pack(side="left", padx=5)
-        # Pre-fill with detected subnet for convenience
         try: self.subnet_entry.insert(0, NetworkUtils.get_subnet_cidr())
         except: pass
 
@@ -326,9 +373,7 @@ class WemoOpsApp(ctk.CTk):
         
         self.scan_status = ctk.CTkLabel(scan_ctrl, text="", text_color="orange")
         self.scan_status.pack(side="left", padx=10)
-        # -----------------------------
 
-        # Direct Connect Box
         manual_frame = ctk.CTkFrame(frame, fg_color="#222")
         manual_frame.pack(fill="x", pady=(0, 10))
         ctk.CTkLabel(manual_frame, text="Direct Connect:", font=("Arial", 12)).pack(side="left", padx=10)
@@ -341,15 +386,9 @@ class WemoOpsApp(ctk.CTk):
         self.dev_list.pack(fill="both", expand=True)
 
     def refresh_network(self):
-        # Clear list
         for w in self.dev_list.winfo_children(): w.destroy()
-        
-        # Get custom subnet if typed
         manual_subnet = self.subnet_entry.get().strip()
-        
         self.scan_status.configure(text="Initializing...")
-        
-        # Pass subnet to thread
         threading.Thread(target=self._scan_thread, args=(manual_subnet,), daemon=True).start()
 
     def _scan_thread(self, target_subnet):
@@ -359,7 +398,6 @@ class WemoOpsApp(ctk.CTk):
             devices = pywemo.discover_devices()
             for d in devices: self.known_devices_map[d.name] = d
             
-            # Use the target subnet passed from UI
             update_status("Deep Subnet Scan...")
             deep_devices = self.scanner.scan_subnet(target_cidr=target_subnet, status_callback=update_status)
             for d in deep_devices:

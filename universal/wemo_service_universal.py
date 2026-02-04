@@ -7,11 +7,13 @@ import requests
 import pywemo
 import threading
 import logging
+from PIL import Image
+import pystray
 
 # --- CONFIGURATION ---
-VERSION = "v4.0.3 (Universal Service)"
+VERSION = "v4.1.0 (Tray Service)"
 
-# --- PATH SETUP (Must match Main App exactly) ---
+# --- PATH SETUP ---
 if sys.platform == "darwin":
     APP_DATA_DIR = os.path.expanduser("~/Library/Application Support/WemoOps")
 elif sys.platform == "win32":
@@ -27,7 +29,7 @@ SCHEDULE_FILE = os.path.join(APP_DATA_DIR, "schedules.json")
 SETTINGS_FILE = os.path.join(APP_DATA_DIR, "settings.json")
 LOG_FILE = os.path.join(APP_DATA_DIR, "service.log")
 
-# --- LOGGING SETUP ---
+# --- LOGGING ---
 logging.basicConfig(
     filename=LOG_FILE,
     level=logging.INFO,
@@ -35,7 +37,7 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-# --- SOLAR ENGINE (Headless) ---
+# --- SOLAR ENGINE ---
 class SolarEngine:
     def __init__(self):
         self.lat = None
@@ -44,7 +46,6 @@ class SolarEngine:
         self.last_fetch = None
 
     def load_settings(self):
-        """Loads lat/lng from the shared settings file."""
         if os.path.exists(SETTINGS_FILE):
             try:
                 with open(SETTINGS_FILE, 'r') as f:
@@ -55,10 +56,7 @@ class SolarEngine:
 
     def get_solar_times(self):
         today = datetime.date.today()
-        # Refresh if new day or data missing
-        if self.last_fetch == today and self.solar_times:
-            return self.solar_times
-
+        if self.last_fetch == today and self.solar_times: return self.solar_times
         self.load_settings()
         if not self.lat: return None
 
@@ -66,7 +64,6 @@ class SolarEngine:
             url = f"https://api.sunrise-sunset.org/json?lat={self.lat}&lng={self.lng}&formatted=0"
             r = requests.get(url, timeout=10)
             data = r.json()
-            
             if data["status"] == "OK":
                 res = data["results"]
                 def to_local(utc_str):
@@ -75,21 +72,16 @@ class SolarEngine:
                         dt_local = dt_utc.astimezone()
                         return dt_local.strftime("%H:%M")
                     except: return "00:00"
-
                 self.solar_times = {
                     "sunrise": to_local(res["sunrise"]),
                     "sunset": to_local(res["sunset"])
                 }
                 self.last_fetch = today
-                logging.info(f"Solar Update: Rise={self.solar_times['sunrise']}, Set={self.solar_times['sunset']}")
                 return self.solar_times
-        except Exception as e:
-            logging.error(f"Solar Fetch Failed: {e}")
+        except: pass
         return None
 
-# ==============================================================================
-#  SERVICE RUNNER
-# ==============================================================================
+# --- SERVICE RUNNER ---
 class WemoService:
     def __init__(self):
         self.known_devices = {}
@@ -98,27 +90,21 @@ class WemoService:
         logging.info(f"--- Wemo Service {VERSION} Started ---")
 
     def discover_devices(self):
-        """Periodically refreshes the device list."""
         try:
             devices = pywemo.discover_devices()
-            for d in devices:
-                self.known_devices[d.name] = d
-            logging.info(f"Discovery: Found {len(self.known_devices)} devices.")
-        except Exception as e:
-            logging.error(f"Discovery Error: {e}")
+            for d in devices: self.known_devices[d.name] = d
+        except: pass
 
     def load_schedules(self):
         if os.path.exists(SCHEDULE_FILE):
             try:
-                with open(SCHEDULE_FILE, 'r') as f:
-                    return json.load(f)
+                with open(SCHEDULE_FILE, 'r') as f: return json.load(f)
             except: pass
         return []
 
     def save_schedules(self, data):
         try:
-            with open(SCHEDULE_FILE, 'w') as f:
-                json.dump(data, f)
+            with open(SCHEDULE_FILE, 'w') as f: json.dump(data, f)
         except: pass
 
     def execute_job(self, job):
@@ -132,73 +118,92 @@ class WemoService:
                 elif action == "Turn OFF": dev.off()
                 elif action == "Toggle": dev.toggle()
             except Exception as e:
-                logging.error(f"Execution Failed for {dev_name}: {e}")
-        else:
-            logging.warning(f"EXECUTE FAILED: Device '{dev_name}' not found.")
+                logging.error(f"Execution Failed: {e}")
 
-    def run(self):
+    def loop(self):
         # Initial Discovery
         self.discover_devices()
-        
         last_discovery = time.time()
         
         while self.running:
             try:
-                # 1. Refresh Devices every 15 minutes
                 if time.time() - last_discovery > 900:
                     self.discover_devices()
                     last_discovery = time.time()
 
-                # 2. Process Schedules
                 schedules = self.load_schedules()
                 if not schedules:
-                    time.sleep(30)
-                    continue
+                    time.sleep(30); continue
 
                 now = datetime.datetime.now()
                 today_str = now.strftime("%Y-%m-%d")
                 weekday = now.weekday()
                 current_hhmm = now.strftime("%H:%M")
-                
                 solar_data = self.solar.get_solar_times()
-
                 schedule_updated = False
                 
                 for job in schedules:
-                    # Skip if wrong day
                     if weekday not in job['days']: continue
-                    
-                    # Calculate Trigger Time
                     trigger_time = ""
-                    if job['type'] == "Time (Fixed)":
-                        trigger_time = job['value']
+                    if job['type'] == "Time (Fixed)": trigger_time = job['value']
                     elif solar_data:
                         base_str = solar_data['sunrise'] if job['type'] == "Sunrise" else solar_data['sunset']
                         try:
-                            # Reconstruct datetime to add offset
                             dt_base = datetime.datetime.strptime(f"{today_str} {base_str}", "%Y-%m-%d %H:%M")
                             offset_mins = int(job['value']) * job['offset_dir']
                             trigger_dt = dt_base + datetime.timedelta(minutes=offset_mins)
                             trigger_time = trigger_dt.strftime("%H:%M")
                         except: continue
 
-                    # Check Trigger
-                    if trigger_time == current_hhmm:
-                        # Prevent double-firing in the same minute
-                        if job.get('last_run') != today_str:
-                            self.execute_job(job)
-                            job['last_run'] = today_str
-                            schedule_updated = True
+                    if trigger_time == current_hhmm and job.get('last_run') != today_str:
+                        self.execute_job(job)
+                        job['last_run'] = today_str
+                        schedule_updated = True
                 
-                if schedule_updated:
-                    self.save_schedules(schedules)
+                if schedule_updated: self.save_schedules(schedules)
 
-            except Exception as e:
-                logging.error(f"Loop Error: {e}")
+            except Exception as e: logging.error(f"Loop Error: {e}")
+            
+            # Check stop flag frequently
+            for _ in range(30):
+                if not self.running: break
+                time.sleep(1)
 
-            # Sleep 30 seconds to catch every minute change without high CPU usage
-            time.sleep(30)
+    def stop(self):
+        self.running = False
+
+# --- TRAY ICON SETUP ---
+def run_tray():
+    service = WemoService()
+    
+    # Start automation loop in background thread
+    t = threading.Thread(target=service.loop)
+    t.daemon = True
+    t.start()
+
+    def on_exit(icon, item):
+        service.stop()
+        icon.stop()
+
+    # Load Icon
+    if getattr(sys, 'frozen', False):
+        icon_path = os.path.join(sys._MEIPASS, "icon.ico")
+    else:
+        icon_path = "icon.ico"
+    
+    try:
+        image = Image.open(icon_path)
+    except:
+        # Fallback: Create a simple colored block if icon missing
+        image = Image.new('RGB', (64, 64), color = (73, 109, 137))
+
+    menu = pystray.Menu(
+        pystray.MenuItem("Wemo Ops Service (Running)", lambda: None, enabled=False),
+        pystray.MenuItem("Exit", on_exit)
+    )
+
+    icon = pystray.Icon("WemoOps", image, "Wemo Ops Service", menu)
+    icon.run()
 
 if __name__ == "__main__":
-    service = WemoService()
-    service.run()
+    run_tray()
