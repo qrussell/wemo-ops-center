@@ -3,7 +3,7 @@
 # --- CONFIGURATION ---
 APP_NAME="WemoOps"
 SAFE_NAME="wemo-ops" # RPMs don't like uppercase or spaces
-VERSION="4.1.0"
+VERSION="4.1.6"
 RELEASE="1"
 ARCH="x86_64"        # RPM calls amd64 "x86_64"
 SUMMARY="Wemo Ops Center - Automation and Provisioning Tool"

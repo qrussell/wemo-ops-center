@@ -2,7 +2,7 @@
 
 # --- CONFIGURATION ---
 APP_NAME="WemoOps"
-VERSION="4.1.0"
+VERSION="4.1.6"
 ARCH="amd64"  # Use 'arm64' if building on Raspberry Pi
 MAINTAINER="Quentin Russell <quentin@quentinrussell.com>"
 DESC="Wemo Ops Center - Automation and Provisioning Tool"
