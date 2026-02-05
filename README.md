@@ -13,7 +13,7 @@ Wemo Ops Center is a completely local, offline provisioning and automation suite
 
 No Python installation required.
 
-1.  **Download:** Go to the [Releases Page](../../releases) and download `WemoOps_v4.1.6.exe`.
+1.  **Download:** Go to the [Releases Page](../../releases) and download `WemoOps_v4.1.7.exe`.
 2.  **Provisioner** Follow the on-screen instructions to scan for and configure your Wemo devices.
 3.  **Dashboard** Scan Network, Control Devices, and Rename Devices.  IP, MAC, FW ver, SN, and HomeKit code are displayed.
 
