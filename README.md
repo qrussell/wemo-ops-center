@@ -2,7 +2,7 @@
 
 ![Wemo Ops Center Dashboard](assets/wemo-ops.png)
 
-![Version](https://img.shields.io/badge/version-v4.1.6-blue)
+![Version](https://img.shields.io/badge/version-v4.1.7-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ---
