@@ -11,13 +11,21 @@ import socket
 import ipaddress
 import subprocess
 import concurrent.futures
+import webbrowser
+import re
 from tkinter import messagebox
 import pyperclip
 
 # --- CONFIGURATION ---
-VERSION = "v4.1.7 (Performance Optimized)"
+VERSION = "version 4.2.0"
 
-# --- PATH SETUP (Cross-Platform) ---
+# --- UPDATE SETTINGS ---
+# Points to the API endpoint
+UPDATE_API_URL = "https://api.github.com/repos/qrussell/wemo-ops-center/releases/latest"
+# The page to open when the user clicks "Download Update"
+UPDATE_PAGE_URL = "https://github.com/qrussell/wemo-ops-center/releases"
+
+# --- PATH SETUP ---
 if sys.platform == "darwin":
     APP_DATA_DIR = os.path.expanduser("~/Library/Application Support/WemoOps")
 elif sys.platform == "win32":
@@ -33,18 +41,66 @@ PROFILE_FILE = os.path.join(APP_DATA_DIR, "wifi_profiles.json")
 SCHEDULE_FILE = os.path.join(APP_DATA_DIR, "schedules.json")
 SETTINGS_FILE = os.path.join(APP_DATA_DIR, "settings.json")
 
-# Determine binary name based on OS
 if sys.platform == "win32":
     SERVICE_EXE_PATH = os.path.join(APP_DATA_DIR, "wemo_service.exe")
 else:
     SERVICE_EXE_PATH = os.path.join(APP_DATA_DIR, "wemo_service")
 
-# --- PYINSTALLER FIX ---
 if getattr(sys, 'frozen', False):
     os.environ['PATH'] += os.pathsep + sys._MEIPASS
 
-ctk.set_appearance_mode("Dark")
-ctk.set_default_color_theme("dark-blue")
+# --- STYLING CONSTANTS ---
+COLOR_BG = ("#ebebeb", "#242424")           
+COLOR_SIDEBAR = ("#d6d6d6", "#1a1a1a")      
+COLOR_CARD = ("#ffffff", "#2b2b2b")         
+COLOR_FRAME = ("#cccccc", "#333333")        
+
+COLOR_TEXT = ("#1a1a1a", "#ffffff")         
+COLOR_SUBTEXT = ("#404040", "#aaaaaa")      
+
+COLOR_ACCENT = ("#1f6aa5", "#1f6aa5")       
+COLOR_SUCCESS = ("#2d8a4e", "#28a745")      
+COLOR_DANGER = ("#c0392b", "#aa3333")       
+COLOR_UPDATE = ("#d35400", "#e67e22")       
+
+COLOR_BTN_SECONDARY = ("#e0e0e0", "#3a3a3a") 
+COLOR_BTN_TEXT = ("#1a1a1a", "#ffffff")
+
+COLOR_MAINT_BTN_Y = ("#d68910", "#e6b800") 
+COLOR_MAINT_BTN_B = ("#2874a6", "#5599ee")
+COLOR_MAINT_BTN_R = ("#922b21", "#cc0000")
+
+FONT_H1 = ("Roboto", 24, "bold")
+FONT_H2 = ("Roboto", 18, "bold")
+FONT_BODY = ("Roboto", 14)
+FONT_MONO = ("Consolas", 13)
+
+# ==============================================================================
+#  UPDATE MANAGER
+# ==============================================================================
+class UpdateManager:
+    @staticmethod
+    def check_for_updates(current_version_str, api_url):
+        if not api_url: return False, None
+        try:
+            headers = {'User-Agent': 'WemoOps-Updater'}
+            r = requests.get(api_url, headers=headers, timeout=3)
+            if r.status_code == 200:
+                data = r.json()
+                remote_tag = data.get("tag_name", "").strip() 
+                if not remote_tag: return False, None
+                
+                curr_clean = re.search(r'(\d+\.\d+\.\d+)', current_version_str)
+                rem_clean = re.search(r'(\d+\.\d+\.\d+)', remote_tag)
+                
+                if curr_clean and rem_clean:
+                    c_parts = [int(x) for x in curr_clean.group(1).split('.')]
+                    r_parts = [int(x) for x in rem_clean.group(1).split('.')]
+                    if r_parts > c_parts: return True, remote_tag
+                elif remote_tag != current_version_str:
+                    return True, remote_tag
+        except: pass
+        return False, None
 
 # ==============================================================================
 #  UNIVERSAL NETWORK UTILS
@@ -114,7 +170,6 @@ class ServiceManager:
     def is_running():
         try:
             if sys.platform == "win32":
-                # Use list args to avoid shell=True overhead where possible
                 output = subprocess.check_output(['tasklist', '/FI', 'IMAGENAME eq wemo_service.exe'], creationflags=0x08000000).decode()
                 return "wemo_service.exe" in output
             else:
@@ -151,32 +206,29 @@ class DeepScanner:
 
     def scan_subnet(self, target_cidr=None, status_callback=None):
         found_devices = []
-        # Support comma-separated subnets
         cidrs = [c.strip() for c in target_cidr.split(',')] if target_cidr else [NetworkUtils.get_subnet_cidr()]
         
         all_hosts = []
         for cidr in cidrs:
             if not cidr: continue
             try:
-                if status_callback: status_callback(f"Preparing Subnet: {cidr}")
+                if status_callback: status_callback(f"Preparing: {cidr}")
                 network = ipaddress.ip_network(cidr, strict=False)
                 all_hosts.extend(list(network.hosts()))
-            except: 
-                if status_callback: status_callback(f"Skipping Invalid Subnet: {cidr}")
+            except: pass
 
         if not all_hosts: return []
 
         active_ips = []
-        if status_callback: status_callback(f"Probing {len(all_hosts)} IPs across networks...")
+        if status_callback: status_callback(f"Probing {len(all_hosts)} IPs...")
 
-        # Increased workers for smoother parallel scanning
         with concurrent.futures.ThreadPoolExecutor(max_workers=150) as executor:
             futures = {executor.submit(self.probe_port, ip): ip for ip in all_hosts}
             for future in concurrent.futures.as_completed(futures):
                 result = future.result()
                 if result: active_ips.append(result)
 
-        if status_callback: status_callback(f"Found {len(active_ips)} active hosts. Verifying Wemo...")
+        if status_callback: status_callback(f"Verifying {len(active_ips)} hosts...")
         
         for ip in active_ips:
             try:
@@ -251,15 +303,19 @@ class WemoOpsApp(ctk.CTk):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
+        self.settings = self.load_json(SETTINGS_FILE, dict)
+        
+        theme = self.settings.get("theme", "System")
+        scale = self.settings.get("scale", "100%")
+        ctk.set_appearance_mode(theme)
+        self.set_ui_scale(scale)
+
         self.current_setup_ip = None 
         self.current_setup_port = None 
         self.manual_override_active = False 
         
         self.profiles = self.load_json(PROFILE_FILE, dict)
-        self.settings = self.load_json(SETTINGS_FILE, dict)
         self.schedules = self.load_json(SCHEDULE_FILE, list) or []
-        
-        # Load Saved Subnets
         self.saved_subnets = self.settings.get("subnets", [])
         
         self.known_devices_map = {} 
@@ -271,10 +327,11 @@ class WemoOpsApp(ctk.CTk):
             self.solar.lng = self.settings["lng"]
 
         # --- SIDEBAR ---
-        self.sidebar = ctk.CTkFrame(self, width=200, corner_radius=0)
+        self.sidebar = ctk.CTkFrame(self, width=200, corner_radius=0, fg_color=COLOR_SIDEBAR)
         self.sidebar.grid(row=0, column=0, sticky="nsew")
-        self.logo = ctk.CTkLabel(self.sidebar, text="WEMO OPS", font=("Arial Black", 20))
-        self.logo.pack(pady=20)
+        
+        self.logo = ctk.CTkLabel(self.sidebar, text="WEMO OPS", font=("Arial Black", 22), text_color=COLOR_TEXT)
+        self.logo.pack(pady=25)
         
         if getattr(sys, 'frozen', False):
             icon_path = os.path.join(sys._MEIPASS, "app_icon.ico")
@@ -288,29 +345,41 @@ class WemoOpsApp(ctk.CTk):
         self.btn_prov = self.create_nav_btn("Provisioner", "prov")
         self.btn_sched = self.create_nav_btn("Automation", "sched")
         self.btn_maint = self.create_nav_btn("Maintenance", "maint")
+        
+        ctk.CTkFrame(self.sidebar, fg_color="transparent").pack(expand=True)
+        
+        self.btn_settings = self.create_nav_btn("Settings", "settings")
 
-        # --- SERVICE CONTROL ---
         self.service_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         self.service_frame.pack(side="bottom", fill="x", pady=20, padx=10)
-        self.svc_lbl = ctk.CTkLabel(self.service_frame, text="Service Status:", font=("Arial", 12, "bold"))
+        self.svc_lbl = ctk.CTkLabel(self.service_frame, text="Service Status:", font=("Arial", 12, "bold"), text_color=COLOR_TEXT)
         self.svc_lbl.pack(anchor="w")
-        self.svc_status = ctk.CTkLabel(self.service_frame, text="Checking...", text_color="gray")
+        self.svc_status = ctk.CTkLabel(self.service_frame, text="Checking...", text_color="gray", font=FONT_BODY)
         self.svc_status.pack(anchor="w")
         self.svc_btn = ctk.CTkButton(self.service_frame, text="▶ Start Service", 
-                                     fg_color="#28a745", hover_color="#1e7e34", height=24,
+                                     fg_color="#28a745", hover_color="#1e7e34", height=30, font=FONT_BODY,
                                      command=self.start_service_manually)
         self.svc_btn.pack_forget()
+        
+        # --- UPDATE BUTTON (Hidden by default) ---
+        self.btn_update = ctk.CTkButton(self.sidebar, text="⬇ Update Available", fg_color=COLOR_UPDATE, 
+                                        font=FONT_BODY, command=lambda: webbrowser.open(UPDATE_PAGE_URL))
+        self.btn_update.pack(side="bottom", padx=10, pady=(0, 10))
+        self.btn_update.pack_forget()
+
         ctk.CTkLabel(self.sidebar, text=f"{VERSION}", text_color="gray", font=("Arial", 10)).pack(side="bottom", pady=5)
 
-        # Main Area
-        self.main_area = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
-        self.main_area.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+        self.main_area = ctk.CTkFrame(self, corner_radius=0, fg_color=COLOR_BG)
+        self.main_area.grid(row=0, column=1, sticky="nsew", padx=0, pady=0)
+        self.content = ctk.CTkFrame(self.main_area, fg_color="transparent")
+        self.content.pack(fill="both", expand=True, padx=20, pady=20)
 
         self.frames = {}
         self.create_dashboard()
         self.create_provisioner()
         self.create_schedule_ui()
         self.create_maintenance_ui()
+        self.create_settings_ui() 
 
         self.show_tab("dash")
         self.after(500, self.refresh_network)
@@ -319,18 +388,33 @@ class WemoOpsApp(ctk.CTk):
         threading.Thread(target=self._connection_monitor, daemon=True).start()
         threading.Thread(target=self._scheduler_engine, daemon=True).start()
         self.check_service_loop()
+        
+        # Run Update Check
+        threading.Thread(target=self.run_update_check, daemon=True).start()
+
+    # --- UPDATE CHECKER LOGIC ---
+    def run_update_check(self):
+        has_update, new_ver = UpdateManager.check_for_updates(VERSION, UPDATE_API_URL)
+        if has_update:
+            self.after(0, lambda: self.show_update_btn(new_ver))
+
+    def show_update_btn(self, new_ver):
+        self.btn_update.configure(text=f"⬇ Get {new_ver}")
+        self.btn_update.pack(side="bottom", padx=10, pady=(0, 10))
+
+    # --- THEME CONTROL ---
+    def change_appearance_mode_event(self, new_appearance_mode: str):
+        ctk.set_appearance_mode(new_appearance_mode)
 
     # --- SERVICE CONTROL (THREADED) ---
     def check_service_loop(self):
-        # Run the blocking check in a thread to prevent UI freezing
         def task():
             is_running = ServiceManager.is_running()
-            self.after(0, lambda: self._update_service_ui(is_running))
-        
+            self.after(0, lambda: self._update_svc_ui(is_running))
         threading.Thread(target=task, daemon=True).start()
         self.after(3000, self.check_service_loop)
 
-    def _update_service_ui(self, is_running):
+    def _update_svc_ui(self, is_running):
         if is_running:
             self.svc_status.configure(text="✅ RUNNING", text_color="#28a745")
             self.svc_btn.pack_forget()
@@ -347,57 +431,100 @@ class WemoOpsApp(ctk.CTk):
             self.svc_btn.configure(state="normal", text="▶ Start Service")
 
     def create_nav_btn(self, text, view_name):
-        btn = ctk.CTkButton(self.sidebar, text=f"  {text}", anchor="w", command=lambda: self.show_tab(view_name))
-        btn.pack(pady=5, padx=10, fill="x")
+        btn = ctk.CTkButton(self.sidebar, text=f"  {text}", anchor="w", 
+                            font=FONT_BODY, height=40,
+                            fg_color="transparent", text_color=COLOR_TEXT,
+                            hover_color=COLOR_FRAME,
+                            command=lambda: self.show_tab(view_name))
+        btn.pack(pady=2, padx=10, fill="x")
+        setattr(self, f"btn_{view_name}", btn)
         return btn
 
     def show_tab(self, name):
         for key, frame in self.frames.items(): frame.pack_forget()
         self.frames[name].pack(fill="both", expand=True)
-        self.btn_dash.configure(fg_color="transparent", text_color=("gray10", "gray90"))
-        self.btn_prov.configure(fg_color="transparent", text_color=("gray10", "gray90"))
-        self.btn_sched.configure(fg_color="transparent", text_color=("gray10", "gray90"))
-        self.btn_maint.configure(fg_color="transparent", text_color=("gray10", "gray90"))
+        for key in ["dash", "prov", "sched", "maint", "settings"]:
+            btn = getattr(self, f"btn_{key}")
+            btn.configure(fg_color="transparent", text_color=COLOR_TEXT)
+        active_btn = getattr(self, f"btn_{name}")
+        active_btn.configure(fg_color=COLOR_FRAME, text_color=COLOR_TEXT)
+
+    # --- SETTINGS TAB ---
+    def create_settings_ui(self):
+        frame = ctk.CTkFrame(self.content, fg_color="transparent")
+        self.frames["settings"] = frame
         
-        if name == "dash": self.btn_dash.configure(fg_color=("gray75", "gray25"), text_color="white")
-        elif name == "prov": self.btn_prov.configure(fg_color=("gray75", "gray25"), text_color="white")
-        elif name == "sched": self.btn_sched.configure(fg_color=("gray75", "gray25"), text_color="white")
-        elif name == "maint": self.btn_maint.configure(fg_color=("gray75", "gray25"), text_color="white")
+        ctk.CTkLabel(frame, text="Application Settings", font=FONT_H1, text_color=COLOR_TEXT).pack(pady=(0, 20), anchor="w")
+        
+        # Appearance Card
+        card = ctk.CTkFrame(frame, fg_color=COLOR_CARD)
+        card.pack(fill="x", pady=10, padx=5)
+        
+        ctk.CTkLabel(card, text="Appearance & Display", font=FONT_H2, text_color=COLOR_TEXT).pack(padx=20, pady=(15,5), anchor="w")
+        
+        r1 = ctk.CTkFrame(card, fg_color="transparent")
+        r1.pack(fill="x", padx=20, pady=10)
+        ctk.CTkLabel(r1, text="Theme Mode:", font=FONT_BODY, text_color=COLOR_TEXT).pack(side="left")
+        
+        self.theme_var = ctk.StringVar(value=self.settings.get("theme", "System"))
+        theme_menu = ctk.CTkOptionMenu(r1, values=["System", "Light", "Dark"], 
+                                       command=self.change_theme, variable=self.theme_var)
+        theme_menu.pack(side="right")
+
+        r2 = ctk.CTkFrame(card, fg_color="transparent")
+        r2.pack(fill="x", padx=20, pady=10)
+        ctk.CTkLabel(r2, text="UI Scaling (Font Size):", font=FONT_BODY, text_color=COLOR_TEXT).pack(side="left")
+        
+        self.scale_var = ctk.StringVar(value=self.settings.get("scale", "100%"))
+        scale_menu = ctk.CTkOptionMenu(r2, values=["80%", "90%", "100%", "110%", "120%", "150%"], 
+                                       command=self.change_scaling, variable=self.scale_var)
+        scale_menu.pack(side="right")
+        
+        ctk.CTkLabel(card, text="Note: Restart app for best results after changing scale.", 
+                     font=FONT_MONO, text_color="gray").pack(pady=10)
+
+    def change_theme(self, new_theme):
+        ctk.set_appearance_mode(new_theme)
+        self.settings["theme"] = new_theme
+        self.save_json(SETTINGS_FILE, self.settings)
+
+    def change_scaling(self, new_scale):
+        self.set_ui_scale(new_scale)
+        self.settings["scale"] = new_scale
+        self.save_json(SETTINGS_FILE, self.settings)
+
+    def set_ui_scale(self, scale_str):
+        scale_float = int(scale_str.replace("%", "")) / 100
+        ctk.set_widget_scaling(scale_float)
 
     # --- DASHBOARD ---
     def create_dashboard(self):
-        frame = ctk.CTkFrame(self.main_area, fg_color="transparent")
+        frame = ctk.CTkFrame(self.content, fg_color="transparent")
         self.frames["dash"] = frame
         
         head = ctk.CTkFrame(frame, fg_color="transparent")
         head.pack(fill="x", pady=(0, 20))
-        ctk.CTkLabel(head, text="Network Overview", font=("Roboto", 24)).pack(side="left")
+        ctk.CTkLabel(head, text="Network Overview", font=FONT_H1, text_color=COLOR_TEXT).pack(side="left")
 
         scan_ctrl = ctk.CTkFrame(head, fg_color="transparent")
         scan_ctrl.pack(side="right")
-        
-        # Subnet Manager UI
-        self.subnet_combo = ctk.CTkComboBox(scan_ctrl, width=200, values=self.saved_subnets)
+        self.subnet_combo = ctk.CTkComboBox(scan_ctrl, width=200, values=self.saved_subnets, font=FONT_BODY)
         self.subnet_combo.pack(side="left", padx=5)
-        self.subnet_combo.set(NetworkUtils.get_subnet_cidr()) # Default
-        
-        ctk.CTkButton(scan_ctrl, text="💾", width=30, command=self.save_subnet).pack(side="left", padx=2)
-        ctk.CTkButton(scan_ctrl, text="🗑️", width=30, fg_color="#aa3333", command=self.delete_subnet).pack(side="left", padx=(2, 10))
-
-        ctk.CTkButton(scan_ctrl, text="Scan Network", width=120, command=self.refresh_network).pack(side="left", padx=5)
-        
-        self.scan_status = ctk.CTkLabel(scan_ctrl, text="", text_color="orange")
+        self.subnet_combo.set(NetworkUtils.get_subnet_cidr()) 
+        ctk.CTkButton(scan_ctrl, text="💾", width=30, command=self.save_subnet, fg_color=COLOR_ACCENT).pack(side="left", padx=2)
+        ctk.CTkButton(scan_ctrl, text="🗑️", width=30, fg_color=COLOR_DANGER, command=self.delete_subnet).pack(side="left", padx=(2, 10))
+        ctk.CTkButton(scan_ctrl, text="Scan Network", width=120, command=self.refresh_network, fg_color=COLOR_ACCENT).pack(side="left", padx=5)
+        self.scan_status = ctk.CTkLabel(scan_ctrl, text="", text_color="orange", font=FONT_BODY)
         self.scan_status.pack(side="left", padx=10)
 
-        manual_frame = ctk.CTkFrame(frame, fg_color="#222")
+        manual_frame = ctk.CTkFrame(frame, fg_color=COLOR_FRAME)
         manual_frame.pack(fill="x", pady=(0, 10))
-        ctk.CTkLabel(manual_frame, text="Direct Connect:", font=("Arial", 12)).pack(side="left", padx=10)
-        self.ip_entry = ctk.CTkEntry(manual_frame, placeholder_text="192.168.1.x", width=150)
+        ctk.CTkLabel(manual_frame, text="Direct Connect:", font=FONT_BODY, text_color=COLOR_TEXT).pack(side="left", padx=10)
+        self.ip_entry = ctk.CTkEntry(manual_frame, placeholder_text="192.168.1.x", width=150, font=FONT_BODY)
         self.ip_entry.pack(side="left", padx=5, pady=10)
-        ctk.CTkButton(manual_frame, text="Add Device", width=100, fg_color="#444", 
-                      command=self.manual_add_device).pack(side="left", padx=5)
+        ctk.CTkButton(manual_frame, text="Add Device", width=100, fg_color=COLOR_BTN_SECONDARY, text_color=COLOR_BTN_TEXT, command=self.manual_add_device).pack(side="left", padx=5)
         
-        self.dev_list = ctk.CTkScrollableFrame(frame, label_text="Discovered Devices")
+        self.dev_list = ctk.CTkScrollableFrame(frame, label_text="Discovered Devices", label_text_color=COLOR_TEXT, label_font=FONT_H2)
         self.dev_list.pack(fill="both", expand=True)
 
     def save_subnet(self):
@@ -419,10 +546,8 @@ class WemoOpsApp(ctk.CTk):
             else: self.subnet_combo.set("")
 
     def refresh_network(self):
-        # CLEAR PREVIOUS RESULTS
         self.known_devices_map.clear()
         for w in self.dev_list.winfo_children(): w.destroy()
-        
         manual_subnet = self.subnet_combo.get().strip()
         self.scan_status.configure(text="Initializing...")
         threading.Thread(target=self._scan_thread, args=(manual_subnet,), daemon=True).start()
@@ -432,17 +557,14 @@ class WemoOpsApp(ctk.CTk):
         try:
             update_status("Quick Scan (SSDP)...")
             devices = pywemo.discover_devices()
-            # Key by MAC to avoid duplicates
             for d in devices: 
                 key = getattr(d, 'mac', d.name)
                 self.known_devices_map[key] = d
-            
             update_status("Deep Subnet Scan...")
             deep_devices = self.scanner.scan_subnet(target_cidr=target_subnet, status_callback=update_status)
             for d in deep_devices:
                 key = getattr(d, 'mac', d.name)
                 self.known_devices_map[key] = d
-
             update_status("")
             self.after(0, self.update_dashboard, list(self.known_devices_map.values()))
             self.after(0, self.update_maint_dropdown)
@@ -453,8 +575,7 @@ class WemoOpsApp(ctk.CTk):
 
     def update_dashboard(self, devices):
         for w in self.dev_list.winfo_children(): w.destroy()
-        if not devices: ctk.CTkLabel(self.dev_list, text="No devices found.").pack(pady=20)
-        # Sort by name
+        if not devices: ctk.CTkLabel(self.dev_list, text="No devices found.", text_color=COLOR_TEXT).pack(pady=20)
         devices.sort(key=lambda x: x.name)
         for dev in devices: self.build_device_card(dev)
 
@@ -464,38 +585,40 @@ class WemoOpsApp(ctk.CTk):
         try: serial = getattr(dev, 'serial_number', "Unknown")
         except: serial = "Unknown"
         
-        card = ctk.CTkFrame(self.dev_list, fg_color="#1a1a1a")
+        card = ctk.CTkFrame(self.dev_list, fg_color=COLOR_CARD)
         card.pack(fill="x", pady=5, padx=5)
+        
         top = ctk.CTkFrame(card, fg_color="transparent")
         top.pack(fill="x", padx=10, pady=(10, 5))
-        ctk.CTkLabel(top, text="⚡", font=("Arial", 20)).pack(side="left", padx=(0,10))
-        ctk.CTkLabel(top, text=f"{dev.name}", font=("Roboto", 16, "bold")).pack(side="left")
         
-        # Action to Toggle
+        ctk.CTkLabel(top, text="⚡", font=("Arial", 24), text_color=COLOR_TEXT).pack(side="left", padx=(0,10))
+        ctk.CTkLabel(top, text=f"{dev.name}", font=FONT_H2, text_color=COLOR_TEXT).pack(side="left")
+        
         def toggle(): threading.Thread(target=dev.toggle, daemon=True).start()
-        switch = ctk.CTkSwitch(top, text="Power", command=toggle)
+        switch = ctk.CTkSwitch(top, text="Power", command=toggle, font=FONT_BODY, text_color=COLOR_TEXT)
         switch.pack(side="right")
         
-        # --- NON-BLOCKING STATE FETCH (Fixes Freeze) ---
         def fetch_state():
             try:
                 state = dev.get_state()
                 if state: self.after(0, switch.select)
             except: pass
         threading.Thread(target=fetch_state, daemon=True).start()
-        # -----------------------------------------------
 
         mid = ctk.CTkFrame(card, fg_color="transparent")
         mid.pack(fill="x", padx=10, pady=0)
-        ctk.CTkLabel(mid, text=f"IP: {dev.host} | MAC: {mac} | SN: {serial}", font=("Consolas", 11), text_color="#aaa").pack(anchor="w")
+        ctk.CTkLabel(mid, text=f"IP: {dev.host} | MAC: {mac} | SN: {serial}", font=FONT_MONO, text_color=COLOR_SUBTEXT).pack(anchor="w")
+        
         bot = ctk.CTkFrame(card, fg_color="transparent")
         bot.pack(fill="x", padx=10, pady=(5, 10))
+        
         def rename_action():
             new_name = ctk.CTkInputDialog(text="Name:", title="Rename").get_input()
             if new_name: threading.Thread(target=self._rename_task, args=(dev, new_name), daemon=True).start()
-        ctk.CTkButton(bot, text="✎ Rename", width=80, height=24, fg_color="#444", command=rename_action).pack(side="left", padx=(0, 10))
+        ctk.CTkButton(bot, text="✎ Rename", width=80, height=24, fg_color=COLOR_BTN_SECONDARY, text_color=COLOR_BTN_TEXT, command=rename_action).pack(side="left", padx=(0, 10))
+        
         def extract_hk(): threading.Thread(target=self._extract_hk_task, args=(dev,), daemon=True).start()
-        ctk.CTkButton(bot, text="Get HomeKit Code", width=120, height=24, fg_color="#555", command=extract_hk).pack(side="left")
+        ctk.CTkButton(bot, text="Get HomeKit Code", width=120, height=24, fg_color=COLOR_BTN_SECONDARY, text_color=COLOR_BTN_TEXT, command=extract_hk).pack(side="left")
 
     def _rename_task(self, dev, new_name):
         try:
@@ -534,54 +657,61 @@ class WemoOpsApp(ctk.CTk):
 
     # --- PROVISIONER ---
     def create_provisioner(self):
-        frame = ctk.CTkFrame(self.main_area, fg_color="transparent")
+        frame = ctk.CTkFrame(self.content, fg_color="transparent")
         self.frames["prov"] = frame
-        frame.columnconfigure(0, weight=1) 
-        frame.columnconfigure(1, weight=2)
+        frame.columnconfigure(0, weight=1); frame.columnconfigure(1, weight=2)
         frame.rowconfigure(0, weight=1)
+        
         left_col = ctk.CTkFrame(frame, fg_color="transparent")
         left_col.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
-        ctk.CTkLabel(left_col, text="Step 1: Locate Device", font=("Arial", 14, "bold")).pack(anchor="w", pady=(0,5))
-        scan_frame = ctk.CTkFrame(left_col, fg_color="#222")
+        ctk.CTkLabel(left_col, text="Step 1: Locate Device", font=FONT_H2, text_color=COLOR_TEXT).pack(anchor="w", pady=(0,5))
+        
+        scan_frame = ctk.CTkFrame(left_col, fg_color=COLOR_FRAME)
         scan_frame.pack(fill="x", pady=(0, 20))
-        self.btn_scan_setup = ctk.CTkButton(scan_frame, text="🔍 Scan Airwaves", command=self.scan_ssids)
+        self.btn_scan_setup = ctk.CTkButton(scan_frame, text="🔍 Scan Airwaves", command=self.scan_ssids, fg_color=COLOR_ACCENT)
         self.btn_scan_setup.pack(pady=10, padx=10, fill="x")
-        self.ssid_list = ctk.CTkScrollableFrame(scan_frame, height=100, label_text="Nearby Networks")
+        self.ssid_list = ctk.CTkScrollableFrame(scan_frame, height=100, label_text="Nearby Networks", label_text_color=COLOR_TEXT)
         self.ssid_list.pack(fill="x", padx=10, pady=(0,10))
-        ctk.CTkLabel(left_col, text="Step 2: Configuration", font=("Arial", 14, "bold")).pack(anchor="w", pady=(0,5))
+        
+        ctk.CTkLabel(left_col, text="Step 2: Configuration", font=FONT_H2, text_color=COLOR_TEXT).pack(anchor="w", pady=(0,5))
         input_frame = ctk.CTkFrame(left_col, fg_color="transparent")
         input_frame.pack(fill="x")
         prof_row = ctk.CTkFrame(input_frame, fg_color="transparent")
         prof_row.pack(fill="x", pady=5)
         self.profile_combo = ctk.CTkComboBox(prof_row, values=["Select Saved Profile..."] + list(self.profiles.keys()), command=self.apply_profile, width=200)
         self.profile_combo.pack(side="left", fill="x", expand=True)
-        ctk.CTkButton(prof_row, text="💾", width=40, command=self.save_current_profile).pack(side="left", padx=5)
-        ctk.CTkButton(prof_row, text="🗑️", width=40, fg_color="#aa3333", hover_color="#882222", command=self.delete_profile).pack(side="left")
+        ctk.CTkButton(prof_row, text="💾", width=40, command=self.save_current_profile, fg_color=COLOR_ACCENT).pack(side="left", padx=5)
+        ctk.CTkButton(prof_row, text="🗑️", width=40, fg_color=COLOR_DANGER, hover_color="#882222", command=self.delete_profile).pack(side="left")
+        
         self.name_entry = ctk.CTkEntry(input_frame, placeholder_text="Device Name (e.g. Office Fan)")
         self.name_entry.pack(fill="x", pady=5)
         self.ssid_entry = ctk.CTkEntry(input_frame, placeholder_text="SSID")
         self.ssid_entry.pack(fill="x", pady=5)
         self.pass_entry = ctk.CTkEntry(input_frame, placeholder_text="Password", show="*")
         self.pass_entry.pack(fill="x", pady=5)
-        self.prov_btn = ctk.CTkButton(left_col, text="Push Configuration", fg_color="#28a745", hover_color="#1e7e34", height=50, state="disabled", command=self.run_provision_thread)
+        
+        self.prov_btn = ctk.CTkButton(left_col, text="Push Configuration", fg_color=COLOR_SUCCESS, hover_color="#1e7e34", height=50, state="disabled", command=self.run_provision_thread)
         self.prov_btn.pack(fill="x", pady=20)
+        
         right_col = ctk.CTkFrame(frame, fg_color="transparent")
         right_col.grid(row=0, column=1, sticky="nsew")
-        self.status_frame = ctk.CTkFrame(right_col, fg_color="#331111", border_color="#ff5555", border_width=2)
+        self.status_frame = ctk.CTkFrame(right_col, fg_color=("#fadbd8", "#331111"), border_color="#ff5555", border_width=2)
         self.status_frame.pack(fill="x", pady=(0, 10))
         self.status_lbl_icon = ctk.CTkLabel(self.status_frame, text="❌", font=("Arial", 30))
         self.status_lbl_icon.pack(side="left", padx=15, pady=15)
         stat_txt = ctk.CTkFrame(self.status_frame, fg_color="transparent")
         stat_txt.pack(side="left", fill="x")
-        self.status_lbl_text = ctk.CTkLabel(stat_txt, text="NOT CONNECTED", font=("Arial", 16, "bold"), text_color="#ff5555")
+        self.status_lbl_text = ctk.CTkLabel(stat_txt, text="NOT CONNECTED", font=FONT_H2, text_color="#ff5555")
         self.status_lbl_text.pack(anchor="w")
-        self.status_lbl_sub = ctk.CTkLabel(stat_txt, text="Connect Wi-Fi to 'Wemo.Mini.XXX'", font=("Arial", 12))
+        self.status_lbl_sub = ctk.CTkLabel(stat_txt, text="Connect Wi-Fi to 'Wemo.Mini.XXX'", font=FONT_BODY, text_color=COLOR_TEXT)
         self.status_lbl_sub.pack(anchor="w")
+        
         self.override_link = ctk.CTkLabel(right_col, text="[Manual Override]", font=("Arial", 10, "underline"), text_color="gray", cursor="hand2")
         self.override_link.pack(anchor="e", pady=(0, 5))
         self.override_link.bind("<Button-1>", lambda e: self.force_unlock())
-        ctk.CTkLabel(right_col, text="Live Operation Log", font=("Arial", 12)).pack(anchor="w")
-        self.prov_log = ctk.CTkTextbox(right_col, font=("Consolas", 12), activate_scrollbars=True)
+        
+        ctk.CTkLabel(right_col, text="Live Operation Log", font=FONT_BODY, text_color=COLOR_TEXT).pack(anchor="w")
+        self.prov_log = ctk.CTkTextbox(right_col, font=FONT_MONO, activate_scrollbars=True)
         self.prov_log.pack(fill="both", expand=True)
 
     def run_provision_thread(self):
@@ -607,8 +737,7 @@ class WemoOpsApp(ctk.CTk):
             if friendly_name and hasattr(dev, 'basicevent'):
                 self.log_prov(f"Setting Name to: {friendly_name}")
                 dev.basicevent.ChangeFriendlyName(FriendlyName=friendly_name)
-                self.log_prov("Wait 5s for flash write...")
-                time.sleep(5) 
+                time.sleep(1) 
             self.log_prov("Starting Adaptive Encryption Loop (v3.1 Smart Loop)...")
             self._brute_force_provision(dev, ssid, pwd)
             self.log_prov("SUCCESS: Configuration Sent!")
@@ -626,43 +755,46 @@ class WemoOpsApp(ctk.CTk):
                     dev.setup(ssid=ssid, password=pwd, _encrypt_method=mode, _add_password_lengths=length)
                     self.log_prov(f"  > Accepted!")
                     return
-                except Exception as e:
-                    self.log_prov(f"  > Failed: {e}")
-                    pass
+                except: pass
         raise Exception("All provisioning attempts failed.")
 
     # --- MAINTENANCE (FIXED) ---
     def create_maintenance_ui(self):
-        frame = ctk.CTkFrame(self.main_area, fg_color="transparent")
+        frame = ctk.CTkFrame(self.content, fg_color="transparent")
         self.frames["maint"] = frame
-        ctk.CTkLabel(frame, text="Device Maintenance Tools", font=("Roboto", 24)).pack(pady=20)
-        sel_frame = ctk.CTkFrame(frame, fg_color="#222")
+        ctk.CTkLabel(frame, text="Device Maintenance Tools", font=FONT_H1, text_color=COLOR_TEXT).pack(pady=20)
+        
+        sel_frame = ctk.CTkFrame(frame, fg_color=COLOR_FRAME)
         sel_frame.pack(fill="x", padx=20, pady=10)
-        ctk.CTkLabel(sel_frame, text="Select Target Device:").pack(side="left", padx=10, pady=10)
+        ctk.CTkLabel(sel_frame, text="Select Target Device:", font=FONT_BODY, text_color=COLOR_TEXT).pack(side="left", padx=10, pady=10)
         self.maint_dev_combo = ctk.CTkComboBox(sel_frame, values=["Scanning..."], width=300)
         self.maint_dev_combo.pack(side="left", padx=10)
+        
         grid = ctk.CTkFrame(frame, fg_color="transparent")
         grid.pack(fill="both", expand=True, padx=20, pady=10)
         
-        c1 = ctk.CTkFrame(grid, fg_color="#332222")
+        c1 = ctk.CTkFrame(grid, fg_color=("#fff8e1", "#332222"))
         c1.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
-        ctk.CTkLabel(c1, text="Clear Personal Info", font=("Arial", 16, "bold"), text_color="#ffcc00").pack(pady=(15,5))
-        ctk.CTkLabel(c1, text="Removes Name/Icon/Rules", text_color="#bbb").pack(pady=5)
-        ctk.CTkButton(c1, text="Run (Reset=1)", fg_color="#ffcc00", text_color="black", hover_color="#e6b800",
+        ctk.CTkLabel(c1, text="Clear Personal Info", font=FONT_H2, text_color=("#b38f00", "#ffcc00")).pack(pady=(15,5))
+        ctk.CTkLabel(c1, text="Removes custom Name, Icon,\nand Rules. Keeps Wi-Fi.", text_color="gray").pack(pady=5)
+        # YELLOW CARD BTN (Contrast Fixed, Font Crash Fixed)
+        ctk.CTkButton(c1, text="Run (Reset=1)", fg_color=COLOR_MAINT_BTN_Y, text_color="#000000", font=FONT_BODY,
                       command=lambda: self.run_reset_command(1)).pack(pady=15)
                       
-        c2 = ctk.CTkFrame(grid, fg_color="#222233")
+        c2 = ctk.CTkFrame(grid, fg_color=("#e3f2fd", "#222233"))
         c2.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
-        ctk.CTkLabel(c2, text="Clear Wi-Fi", font=("Arial", 16, "bold"), text_color="#66aaff").pack(pady=(15,5))
-        ctk.CTkLabel(c2, text="Resets Wi-Fi Credentials", text_color="#bbb").pack(pady=5)
-        ctk.CTkButton(c2, text="Run (Reset=5)", fg_color="#66aaff", text_color="black", hover_color="#5599ee",
+        ctk.CTkLabel(c2, text="Clear Wi-Fi", font=FONT_H2, text_color=("#0055aa", "#66aaff")).pack(pady=(15,5))
+        ctk.CTkLabel(c2, text="Resets Wi-Fi Credentials", text_color="gray").pack(pady=5)
+        # BLUE CARD BTN
+        ctk.CTkButton(c2, text="Run (Reset=5)", fg_color=COLOR_MAINT_BTN_B, text_color="#ffffff", font=FONT_BODY,
                       command=lambda: self.run_reset_command(5)).pack(pady=15)
 
-        c3 = ctk.CTkFrame(grid, fg_color="#330000")
+        c3 = ctk.CTkFrame(grid, fg_color=("#ffebee", "#330000"))
         c3.grid(row=0, column=2, sticky="nsew", padx=10, pady=10)
-        ctk.CTkLabel(c3, text="Factory Reset", font=("Arial", 16, "bold"), text_color="#ff4444").pack(pady=(15,5))
-        ctk.CTkLabel(c3, text="Full Wipe (Out of Box)", text_color="#bbb").pack(pady=5)
-        ctk.CTkButton(c3, text="NUKE (Reset=2)", fg_color="#ff4444", text_color="white", hover_color="#cc0000",
+        ctk.CTkLabel(c3, text="Factory Reset", font=FONT_H2, text_color=("#aa0000", "#ff4444")).pack(pady=(15,5))
+        ctk.CTkLabel(c3, text="Full Wipe (Out of Box)", text_color="gray").pack(pady=5)
+        # RED CARD BTN
+        ctk.CTkButton(c3, text="NUKE (Reset=2)", fg_color=COLOR_MAINT_BTN_R, text_color="#ffffff", font=FONT_BODY,
                       command=lambda: self.run_reset_command(2)).pack(pady=15)
         
         grid.columnconfigure(0, weight=1); grid.columnconfigure(1, weight=1); grid.columnconfigure(2, weight=1)
@@ -677,7 +809,6 @@ class WemoOpsApp(ctk.CTk):
             
     def run_reset_command(self, reset_code):
         name = self.maint_dev_combo.get()
-        # Find device in map by name
         dev = None
         for d in self.known_devices_map.values():
             if d.name == name:
@@ -704,16 +835,27 @@ class WemoOpsApp(ctk.CTk):
 
     # --- SCHEDULER (Same as previous) ---
     def create_schedule_ui(self):
-        frame = ctk.CTkFrame(self.main_area, fg_color="transparent")
+        frame = ctk.CTkFrame(self.content, fg_color="transparent")
         self.frames["sched"] = frame
-        loc_frame = ctk.CTkFrame(frame, fg_color="#222")
+        
+        ctk.CTkLabel(frame, text="Automation Scheduler", font=FONT_H1, text_color=COLOR_TEXT).pack(pady=20)
+        
+        # Location
+        loc_frame = ctk.CTkFrame(frame, fg_color=COLOR_FRAME)
         loc_frame.pack(fill="x", pady=(0, 10))
-        ctk.CTkLabel(loc_frame, text="Solar Location:", font=("Arial", 12, "bold")).pack(side="left", padx=10)
+        ctk.CTkLabel(loc_frame, text="Solar Location:", font=FONT_H2, text_color=COLOR_TEXT).pack(side="left", padx=10)
         self.loc_lbl = ctk.CTkLabel(loc_frame, text="Detecting...", text_color="orange")
         self.loc_lbl.pack(side="left")
-        ctk.CTkButton(loc_frame, text="Update Solar Data", width=120, fg_color="#444", command=self.update_solar_data).pack(side="right", padx=10, pady=5)
+        
+        # FIXED BUTTON: Use COLOR_BTN_SECONDARY instead of COLOR_SUBTEXT
+        ctk.CTkButton(loc_frame, text="Update Solar Data", width=120, 
+                      fg_color=COLOR_BTN_SECONDARY, text_color=COLOR_BTN_TEXT, 
+                      command=self.update_solar_data).pack(side="right", padx=10, pady=5)
+        
+        # Creator
         creator_frame = ctk.CTkFrame(frame)
         creator_frame.pack(fill="x", pady=10)
+        
         r1 = ctk.CTkFrame(creator_frame, fg_color="transparent")
         r1.pack(fill="x", padx=10, pady=5)
         self.sched_dev_combo = ctk.CTkComboBox(r1, values=["Scanning..."], width=200)
@@ -722,15 +864,17 @@ class WemoOpsApp(ctk.CTk):
         self.sched_action_combo.pack(side="left", padx=5)
         self.sched_type_combo = ctk.CTkComboBox(r1, values=["Time (Fixed)", "Sunrise", "Sunset"], width=130, command=self.on_sched_type_change)
         self.sched_type_combo.pack(side="left", padx=5)
+        
         r2 = ctk.CTkFrame(creator_frame, fg_color="transparent")
         r2.pack(fill="x", padx=10, pady=5)
-        self.sched_val_lbl = ctk.CTkLabel(r2, text="Time (HH:MM):")
+        self.sched_val_lbl = ctk.CTkLabel(r2, text="Time (HH:MM):", text_color=COLOR_TEXT)
         self.sched_val_lbl.pack(side="left", padx=5)
         self.sched_val_entry = ctk.CTkEntry(r2, width=80, placeholder_text="18:00")
         self.sched_val_entry.pack(side="left", padx=5)
         self.sched_offset_combo = ctk.CTkComboBox(r2, values=["+ (After)", "- (Before)"], width=100)
         self.sched_offset_combo.pack(side="left", padx=5)
         self.sched_offset_combo.pack_forget()
+        
         self.day_vars = []
         days = ["M", "T", "W", "Th", "F", "Sa", "Su"]
         day_frame = ctk.CTkFrame(r2, fg_color="transparent")
@@ -738,9 +882,11 @@ class WemoOpsApp(ctk.CTk):
         for i, d in enumerate(days):
             v = ctk.BooleanVar(value=True)
             self.day_vars.append(v)
-            ctk.CTkCheckBox(day_frame, text=d, variable=v, width=40).pack(side="left", padx=2)
-        ctk.CTkButton(r2, text="Create Job", width=100, fg_color="#28a745", command=self.add_job).pack(side="right", padx=10)
-        ctk.CTkLabel(frame, text="Active Schedules", font=("Arial", 16, "bold")).pack(anchor="w", pady=(10,0))
+            ctk.CTkCheckBox(day_frame, text=d, variable=v, width=40, text_color=COLOR_TEXT).pack(side="left", padx=2)
+            
+        ctk.CTkButton(r2, text="Create Job", width=100, fg_color=COLOR_SUCCESS, command=self.add_job).pack(side="right", padx=10)
+        
+        ctk.CTkLabel(frame, text="Active Schedules", font=FONT_H2, text_color=COLOR_TEXT).pack(anchor="w", pady=(10,0))
         self.job_list_frame = ctk.CTkScrollableFrame(frame, height=350)
         self.job_list_frame.pack(fill="both", expand=True, pady=5)
         self.render_jobs()
@@ -792,10 +938,10 @@ class WemoOpsApp(ctk.CTk):
 
     def render_jobs(self):
         for w in self.job_list_frame.winfo_children(): w.destroy()
-        if not self.schedules: ctk.CTkLabel(self.job_list_frame, text="No schedules.").pack(); return
+        if not self.schedules: ctk.CTkLabel(self.job_list_frame, text="No schedules.", text_color="gray").pack(); return
         days_map = ["M", "T", "W", "Th", "F", "Sa", "Su"]
         for job in self.schedules:
-            row = ctk.CTkFrame(self.job_list_frame, fg_color="#333")
+            row = ctk.CTkFrame(self.job_list_frame, fg_color=COLOR_FRAME)
             row.pack(fill="x", pady=2)
             d_str = "".join([days_map[i] for i in job['days']])
             if len(job['days']) == 7: d_str = "Every Day"
@@ -807,8 +953,8 @@ class WemoOpsApp(ctk.CTk):
                     time_desc = f"{job['type']} {dir_s}{off}m"
             except: time_desc = "Error"
             desc = f"[{d_str}] {time_desc} -> {job['action']} '{job['device']}'"
-            ctk.CTkLabel(row, text=desc, font=("Consolas", 12)).pack(side="left", padx=10, pady=5)
-            ctk.CTkButton(row, text="❌", width=30, fg_color="#c0392b", command=lambda j=job: self.delete_job(j["id"])).pack(side="right", padx=5)
+            ctk.CTkLabel(row, text=desc, font=("Consolas", 12), text_color=COLOR_TEXT).pack(side="left", padx=10, pady=5)
+            ctk.CTkButton(row, text="❌", width=30, fg_color=COLOR_DANGER, command=lambda j=job: self.delete_job(j["id"])).pack(side="right", padx=5)
 
     def delete_job(self, jid):
         self.schedules = [j for j in self.schedules if j["id"] != jid]
@@ -913,10 +1059,10 @@ class WemoOpsApp(ctk.CTk):
         else: self.after(0, lambda: ctk.CTkLabel(self.ssid_list, text="No Wemo networks found.", text_color="#ff5555").pack())
 
     def build_ssid_card(self, ssid):
-        card = ctk.CTkFrame(self.ssid_list, fg_color="#333")
+        card = ctk.CTkFrame(self.ssid_list, fg_color=COLOR_FRAME)
         card.pack(fill="x", pady=2, padx=5)
-        ctk.CTkLabel(card, text=ssid, font=("Arial", 12, "bold")).pack(side="left", padx=10)
-        ctk.CTkLabel(card, text="⬅ Connect Manually", text_color="#aaa", font=("Arial", 10)).pack(side="right", padx=10)
+        ctk.CTkLabel(card, text=ssid, font=("Arial", 12, "bold"), text_color=COLOR_TEXT).pack(side="left", padx=10)
+        ctk.CTkLabel(card, text="⬅ Connect Manually", text_color="gray", font=("Arial", 10)).pack(side="right", padx=10)
 
     def log_prov(self, msg):
         self.prov_log.insert("end", f"{msg}\n")
@@ -939,7 +1085,9 @@ class WemoOpsApp(ctk.CTk):
                         check_url = f"http://{ip}:{port}/setup.xml"
                         found_dev = pywemo.discovery.device_from_description(check_url)
                         if found_dev:
-                            found_ip = ip; found_port = port; break
+                            found_ip = ip
+                            found_port = port
+                            break
                     except: pass
                 if found_dev: break
             if found_dev: 
@@ -952,26 +1100,26 @@ class WemoOpsApp(ctk.CTk):
             time.sleep(3)
 
     def set_status_connected(self, dev, ip, port):
-        self.status_frame.configure(fg_color="#1a331a", border_color="#28a745")
+        self.status_frame.configure(fg_color=("#d0f0c0", "#1a331a"), border_color="#28a745")
         self.status_lbl_icon.configure(text="✅")
         self.status_lbl_text.configure(text="CONNECTED", text_color="#28a745")
-        self.status_lbl_sub.configure(text=f"Found: {dev.name} ({ip}:{port})")
+        self.status_lbl_sub.configure(text=f"Found: {dev.name} ({ip}:{port})", text_color=COLOR_TEXT)
         self.prov_btn.configure(state="normal", text="Push Configuration")
         self.override_link.pack_forget()
 
     def set_status_disconnected(self):
-        self.status_frame.configure(fg_color="#331111", border_color="#ff5555")
+        self.status_frame.configure(fg_color=("#fadbd8", "#331111"), border_color="#ff5555")
         self.status_lbl_icon.configure(text="❌")
         self.status_lbl_text.configure(text="NOT CONNECTED", text_color="#ff5555")
-        self.status_lbl_sub.configure(text="Connect Wi-Fi to 'Wemo.Mini.XXX'", font=("Arial", 12))
+        self.status_lbl_sub.configure(text="Connect Wi-Fi to 'Wemo.Mini.XXX'", font=("Arial", 12), text_color=COLOR_TEXT)
         self.prov_btn.configure(state="disabled", text="Waiting for Connection...")
         self.override_link.pack(anchor="e", pady=(0, 5))
 
     def force_unlock(self):
-        self.status_frame.configure(fg_color="#332200", border_color="#FFA500")
+        self.status_frame.configure(fg_color=("#fcf3cf", "#332200"), border_color="#FFA500")
         self.status_lbl_icon.configure(text="⚠️")
         self.status_lbl_text.configure(text="MANUAL OVERRIDE", text_color="#FFA500")
-        self.status_lbl_sub.configure(text="Forced Unlock. Assuming 10.22.22.1.")
+        self.status_lbl_sub.configure(text="Forced Unlock. Assuming 10.22.22.1.", text_color=COLOR_TEXT)
         self.prov_btn.configure(state="normal", text="Push Configuration (Forced)")
         self.current_setup_ip = "10.22.22.1"
         self.log_prov("Manual Override engaged. Assuming IP 10.22.22.1.")
