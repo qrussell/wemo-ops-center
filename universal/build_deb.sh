@@ -2,7 +2,7 @@
 
 # --- CONFIGURATION ---
 APP_NAME="WemoOps"
-VERSION="4.2.0"  # Incremented version for the font update
+VERSION="4.2.6"  # Incremented version for the font update
 ARCH="amd64"     # Use 'arm64' if building on Raspberry Pi
 MAINTAINER="Quentin Russell <quentin@quentinrussell.com>"
 DESC="Wemo Ops Center - Automation and Provisioning Tool"

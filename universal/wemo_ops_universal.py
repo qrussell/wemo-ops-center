@@ -17,12 +17,10 @@ from tkinter import messagebox
 import pyperclip
 
 # --- CONFIGURATION ---
-VERSION = "version 4.2.0"
+VERSION = "v4.2.6"
 
 # --- UPDATE SETTINGS ---
-# Points to the API endpoint
 UPDATE_API_URL = "https://api.github.com/repos/qrussell/wemo-ops-center/releases/latest"
-# The page to open when the user clicks "Download Update"
 UPDATE_PAGE_URL = "https://github.com/qrussell/wemo-ops-center/releases"
 
 # --- PATH SETUP ---
@@ -41,10 +39,21 @@ PROFILE_FILE = os.path.join(APP_DATA_DIR, "wifi_profiles.json")
 SCHEDULE_FILE = os.path.join(APP_DATA_DIR, "schedules.json")
 SETTINGS_FILE = os.path.join(APP_DATA_DIR, "settings.json")
 
+# --- SMART SERVICE PATH DETECTION ---
 if sys.platform == "win32":
     SERVICE_EXE_PATH = os.path.join(APP_DATA_DIR, "wemo_service.exe")
 else:
-    SERVICE_EXE_PATH = os.path.join(APP_DATA_DIR, "wemo_service")
+    # Linux: Check Local Path first, then System Path (RPM install)
+    possible_paths = [
+        os.path.join(APP_DATA_DIR, "wemo_service"),  # Manual Install
+        "/opt/WemoOps/wemo_service",                 # RPM / System Install
+        "/usr/bin/wemo_service"                      # Wrapper/Link
+    ]
+    SERVICE_EXE_PATH = possible_paths[0]
+    for p in possible_paths:
+        if os.path.exists(p):
+            SERVICE_EXE_PATH = p
+            break
 
 if getattr(sys, 'frozen', False):
     os.environ['PATH'] += os.pathsep + sys._MEIPASS
@@ -467,8 +476,9 @@ class WemoOpsApp(ctk.CTk):
         ctk.CTkLabel(r1, text="Theme Mode:", font=FONT_BODY, text_color=COLOR_TEXT).pack(side="left")
         
         self.theme_var = ctk.StringVar(value=self.settings.get("theme", "System"))
-        theme_menu = ctk.CTkOptionMenu(r1, values=["System", "Light", "Dark"], 
-                                       command=self.change_theme, variable=self.theme_var)
+        theme_menu = ctk.CTkComboBox(r1, values=["System", "Light", "Dark"], 
+                                       command=self.change_theme, variable=self.theme_var,
+                                       state="readonly", width=150, font=FONT_BODY)
         theme_menu.pack(side="right")
 
         r2 = ctk.CTkFrame(card, fg_color="transparent")
@@ -476,8 +486,9 @@ class WemoOpsApp(ctk.CTk):
         ctk.CTkLabel(r2, text="UI Scaling (Font Size):", font=FONT_BODY, text_color=COLOR_TEXT).pack(side="left")
         
         self.scale_var = ctk.StringVar(value=self.settings.get("scale", "100%"))
-        scale_menu = ctk.CTkOptionMenu(r2, values=["80%", "90%", "100%", "110%", "120%", "150%"], 
-                                       command=self.change_scaling, variable=self.scale_var)
+        scale_menu = ctk.CTkComboBox(r2, values=["80%", "90%", "100%", "110%", "120%", "150%"], 
+                                       command=self.change_scaling, variable=self.scale_var,
+                                       state="readonly", width=150, font=FONT_BODY)
         scale_menu.pack(side="right")
         
         ctk.CTkLabel(card, text="Note: Restart app for best results after changing scale.", 
@@ -511,8 +522,9 @@ class WemoOpsApp(ctk.CTk):
         self.subnet_combo = ctk.CTkComboBox(scan_ctrl, width=200, values=self.saved_subnets, font=FONT_BODY)
         self.subnet_combo.pack(side="left", padx=5)
         self.subnet_combo.set(NetworkUtils.get_subnet_cidr()) 
-        ctk.CTkButton(scan_ctrl, text="💾", width=30, command=self.save_subnet, fg_color=COLOR_ACCENT).pack(side="left", padx=2)
-        ctk.CTkButton(scan_ctrl, text="🗑️", width=30, fg_color=COLOR_DANGER, command=self.delete_subnet).pack(side="left", padx=(2, 10))
+        # FIX: Replaced Emoji icons with text "Save" and "Del"
+        ctk.CTkButton(scan_ctrl, text="Save", width=50, command=self.save_subnet, fg_color=COLOR_ACCENT).pack(side="left", padx=2)
+        ctk.CTkButton(scan_ctrl, text="Del", width=50, fg_color=COLOR_DANGER, command=self.delete_subnet).pack(side="left", padx=(2, 10))
         ctk.CTkButton(scan_ctrl, text="Scan Network", width=120, command=self.refresh_network, fg_color=COLOR_ACCENT).pack(side="left", padx=5)
         self.scan_status = ctk.CTkLabel(scan_ctrl, text="", text_color="orange", font=FONT_BODY)
         self.scan_status.pack(side="left", padx=10)
@@ -577,7 +589,9 @@ class WemoOpsApp(ctk.CTk):
         for w in self.dev_list.winfo_children(): w.destroy()
         if not devices: ctk.CTkLabel(self.dev_list, text="No devices found.", text_color=COLOR_TEXT).pack(pady=20)
         devices.sort(key=lambda x: x.name)
-        for dev in devices: self.build_device_card(dev)
+        # FIX: Reverted separator logic. Just building cards now.
+        for dev in devices:
+            self.build_device_card(dev)
 
     def build_device_card(self, dev):
         try: mac = getattr(dev, 'mac', "Unknown")
@@ -585,16 +599,18 @@ class WemoOpsApp(ctk.CTk):
         try: serial = getattr(dev, 'serial_number', "Unknown")
         except: serial = "Unknown"
         
-        card = ctk.CTkFrame(self.dev_list, fg_color=COLOR_CARD)
+        # FIX: Added border_width and border_color to create a distinct grouping box in Dark Mode
+        card = ctk.CTkFrame(self.dev_list, fg_color=COLOR_CARD, border_width=1, border_color=COLOR_FRAME)
         card.pack(fill="x", pady=5, padx=5)
         
         top = ctk.CTkFrame(card, fg_color="transparent")
         top.pack(fill="x", padx=10, pady=(10, 5))
         
-        ctk.CTkLabel(top, text="⚡", font=("Arial", 24), text_color=COLOR_TEXT).pack(side="left", padx=(0,10))
+        # FIX: Removed the (Power) text label entirely
         ctk.CTkLabel(top, text=f"{dev.name}", font=FONT_H2, text_color=COLOR_TEXT).pack(side="left")
         
         def toggle(): threading.Thread(target=dev.toggle, daemon=True).start()
+        # FIX: Reverted switch text back to "Power"
         switch = ctk.CTkSwitch(top, text="Power", command=toggle, font=FONT_BODY, text_color=COLOR_TEXT)
         switch.pack(side="right")
         
@@ -615,7 +631,8 @@ class WemoOpsApp(ctk.CTk):
         def rename_action():
             new_name = ctk.CTkInputDialog(text="Name:", title="Rename").get_input()
             if new_name: threading.Thread(target=self._rename_task, args=(dev, new_name), daemon=True).start()
-        ctk.CTkButton(bot, text="✎ Rename", width=80, height=24, fg_color=COLOR_BTN_SECONDARY, text_color=COLOR_BTN_TEXT, command=rename_action).pack(side="left", padx=(0, 10))
+        # FIX: Replaced pencil emoji with ">"
+        ctk.CTkButton(bot, text="> Rename", width=80, height=24, fg_color=COLOR_BTN_SECONDARY, text_color=COLOR_BTN_TEXT, command=rename_action).pack(side="left", padx=(0, 10))
         
         def extract_hk(): threading.Thread(target=self._extract_hk_task, args=(dev,), daemon=True).start()
         ctk.CTkButton(bot, text="Get HomeKit Code", width=120, height=24, fg_color=COLOR_BTN_SECONDARY, text_color=COLOR_BTN_TEXT, command=extract_hk).pack(side="left")
@@ -668,7 +685,8 @@ class WemoOpsApp(ctk.CTk):
         
         scan_frame = ctk.CTkFrame(left_col, fg_color=COLOR_FRAME)
         scan_frame.pack(fill="x", pady=(0, 20))
-        self.btn_scan_setup = ctk.CTkButton(scan_frame, text="🔍 Scan Airwaves", command=self.scan_ssids, fg_color=COLOR_ACCENT)
+        # FIX: Replaced magnifying glass emoji
+        self.btn_scan_setup = ctk.CTkButton(scan_frame, text="Scan Airwaves", command=self.scan_ssids, fg_color=COLOR_ACCENT)
         self.btn_scan_setup.pack(pady=10, padx=10, fill="x")
         self.ssid_list = ctk.CTkScrollableFrame(scan_frame, height=100, label_text="Nearby Networks", label_text_color=COLOR_TEXT)
         self.ssid_list.pack(fill="x", padx=10, pady=(0,10))
@@ -680,8 +698,9 @@ class WemoOpsApp(ctk.CTk):
         prof_row.pack(fill="x", pady=5)
         self.profile_combo = ctk.CTkComboBox(prof_row, values=["Select Saved Profile..."] + list(self.profiles.keys()), command=self.apply_profile, width=200)
         self.profile_combo.pack(side="left", fill="x", expand=True)
-        ctk.CTkButton(prof_row, text="💾", width=40, command=self.save_current_profile, fg_color=COLOR_ACCENT).pack(side="left", padx=5)
-        ctk.CTkButton(prof_row, text="🗑️", width=40, fg_color=COLOR_DANGER, hover_color="#882222", command=self.delete_profile).pack(side="left")
+        # FIX: Replaced Save/Trash emoji with text
+        ctk.CTkButton(prof_row, text="Save", width=50, command=self.save_current_profile, fg_color=COLOR_ACCENT).pack(side="left", padx=5)
+        ctk.CTkButton(prof_row, text="Del", width=50, fg_color=COLOR_DANGER, hover_color="#882222", command=self.delete_profile).pack(side="left")
         
         self.name_entry = ctk.CTkEntry(input_frame, placeholder_text="Device Name (e.g. Office Fan)")
         self.name_entry.pack(fill="x", pady=5)
@@ -697,7 +716,8 @@ class WemoOpsApp(ctk.CTk):
         right_col.grid(row=0, column=1, sticky="nsew")
         self.status_frame = ctk.CTkFrame(right_col, fg_color=("#fadbd8", "#331111"), border_color="#ff5555", border_width=2)
         self.status_frame.pack(fill="x", pady=(0, 10))
-        self.status_lbl_icon = ctk.CTkLabel(self.status_frame, text="❌", font=("Arial", 30))
+        # FIX: Replaced X emoji
+        self.status_lbl_icon = ctk.CTkLabel(self.status_frame, text="X", font=("Arial", 30))
         self.status_lbl_icon.pack(side="left", padx=15, pady=15)
         stat_txt = ctk.CTkFrame(self.status_frame, fg_color="transparent")
         stat_txt.pack(side="left", fill="x")
@@ -954,7 +974,8 @@ class WemoOpsApp(ctk.CTk):
             except: time_desc = "Error"
             desc = f"[{d_str}] {time_desc} -> {job['action']} '{job['device']}'"
             ctk.CTkLabel(row, text=desc, font=("Consolas", 12), text_color=COLOR_TEXT).pack(side="left", padx=10, pady=5)
-            ctk.CTkButton(row, text="❌", width=30, fg_color=COLOR_DANGER, command=lambda j=job: self.delete_job(j["id"])).pack(side="right", padx=5)
+            # FIX: Replaced X emoji with "Del"
+            ctk.CTkButton(row, text="Del", width=30, fg_color=COLOR_DANGER, command=lambda j=job: self.delete_job(j["id"])).pack(side="right", padx=5)
 
     def delete_job(self, jid):
         self.schedules = [j for j in self.schedules if j["id"] != jid]
@@ -1062,7 +1083,8 @@ class WemoOpsApp(ctk.CTk):
         card = ctk.CTkFrame(self.ssid_list, fg_color=COLOR_FRAME)
         card.pack(fill="x", pady=2, padx=5)
         ctk.CTkLabel(card, text=ssid, font=("Arial", 12, "bold"), text_color=COLOR_TEXT).pack(side="left", padx=10)
-        ctk.CTkLabel(card, text="⬅ Connect Manually", text_color="gray", font=("Arial", 10)).pack(side="right", padx=10)
+        # FIX: Replaced arrow emoji
+        ctk.CTkLabel(card, text="> Connect Manually", text_color="gray", font=("Arial", 10)).pack(side="right", padx=10)
 
     def log_prov(self, msg):
         self.prov_log.insert("end", f"{msg}\n")
@@ -1101,7 +1123,8 @@ class WemoOpsApp(ctk.CTk):
 
     def set_status_connected(self, dev, ip, port):
         self.status_frame.configure(fg_color=("#d0f0c0", "#1a331a"), border_color="#28a745")
-        self.status_lbl_icon.configure(text="✅")
+        # FIX: Replaced checkmark emoji
+        self.status_lbl_icon.configure(text="OK")
         self.status_lbl_text.configure(text="CONNECTED", text_color="#28a745")
         self.status_lbl_sub.configure(text=f"Found: {dev.name} ({ip}:{port})", text_color=COLOR_TEXT)
         self.prov_btn.configure(state="normal", text="Push Configuration")
@@ -1109,7 +1132,8 @@ class WemoOpsApp(ctk.CTk):
 
     def set_status_disconnected(self):
         self.status_frame.configure(fg_color=("#fadbd8", "#331111"), border_color="#ff5555")
-        self.status_lbl_icon.configure(text="❌")
+        # FIX: Replaced X emoji
+        self.status_lbl_icon.configure(text="X")
         self.status_lbl_text.configure(text="NOT CONNECTED", text_color="#ff5555")
         self.status_lbl_sub.configure(text="Connect Wi-Fi to 'Wemo.Mini.XXX'", font=("Arial", 12), text_color=COLOR_TEXT)
         self.prov_btn.configure(state="disabled", text="Waiting for Connection...")
@@ -1117,7 +1141,8 @@ class WemoOpsApp(ctk.CTk):
 
     def force_unlock(self):
         self.status_frame.configure(fg_color=("#fcf3cf", "#332200"), border_color="#FFA500")
-        self.status_lbl_icon.configure(text="⚠️")
+        # FIX: Replaced warning emoji
+        self.status_lbl_icon.configure(text="(!)")
         self.status_lbl_text.configure(text="MANUAL OVERRIDE", text_color="#FFA500")
         self.status_lbl_sub.configure(text="Forced Unlock. Assuming 10.22.22.1.", text_color=COLOR_TEXT)
         self.prov_btn.configure(state="normal", text="Push Configuration (Forced)")
