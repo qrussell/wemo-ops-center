@@ -2,7 +2,7 @@
 
 # --- CONFIGURATION ---
 APP_NAME="WemoOps"
-VERSION="4.1.7"
+VERSION="4.2.0"
 ICON_FILE="images/WemoOpsCenter.icns"
 MAIN_SCRIPT="wemo_ops_universal.py"
 SERVICE_SCRIPT="wemo_service_universal.py"
