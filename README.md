@@ -121,7 +121,7 @@ sudo apt install wemo-ops       # Ubuntu / Debian
 ## ⚙️ Option 2: The Automation Server
 (For Homelabs & Always-On Automation)
 
-Wemo Ops Server is a lightweight, headless service designed to run on a Raspberry Pi, VM, or Home Server. It provides a Web UI accessible from any device on your network and executes automation schedules even when your computer is turned off.
+Wemo Ops Server is a lightweight, headless service designed to run on a Raspberry Pi, VM, or Home Server. It provides a Web UI accessible from any device on your network and executes automation schedules even when your computer is turned off.  Visit the wiki page [Wiki Page](/wemo-ops-center/wiki/Wemo-Ops-Server)
 <table>
   <tr>
     <th width="50%">Dashboard</th>
