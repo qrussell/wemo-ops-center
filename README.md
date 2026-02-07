@@ -13,7 +13,7 @@ Wemo Ops Center is a completely local, offline provisioning and automation suite
 
 No Python installation required.
 
-1.  **Download:** Go to the [Releases Page](../../releases) and download `WemoOps_v4.1.7.exe`.
+1.  **Download:** Go to the [Releases Page](../../releases) and download.
 2.  **Provisioner** Follow the on-screen instructions to scan for and configure your Wemo devices.
 3.  **Dashboard** Scan Network, Control Devices, and Rename Devices.  IP, MAC, FW ver, SN, and HomeKit code are displayed.
 
@@ -28,25 +28,38 @@ When you launch `WemoOps.exe` for the first time, you may see a blue warning fro
 
 # Wemo Ops Center
 
-**Wemo Ops Dashboard**
-<img width="2368" height="1792" alt="dashboard_v4 1 7" src="https://github.com/user-attachments/assets/3d633e36-7279-4737-867c-19bd42364c98" />
+<table>
+  <tr>
+    <th width="50%">Light Mode</th>
+    <th width="50%">Dark Mode</th>
+  </tr>
+  <tr>
+    <td><img src="https://github.com/user-attachments/assets/49891678-733e-4e44-8eb0-19661c2dce62" width="100%"></td>
+    <td><img src="https://github.com/user-attachments/assets/8a25e527-f515-4a51-97ea-d25c4fb0d557" width="100%"></td>
+</tr>
+<tr>    
+<td><img src="https://github.com/user-attachments/assets/43b87dba-e946-4632-855c-d8cd7a24defc" width="100%"></td>
+    <td><img src="https://github.com/user-attachments/assets/881892f1-87a7-4e4d-ba61-f5cc9e827f5d" width="100%"></td>
+</tr>
+<tr>    
+<td><img src="https://github.com/user-attachments/assets/28a7b09e-2a53-4dcf-87f1-18032ffd3cac" width="100%"></td>
+    <td><img src="https://github.com/user-attachments/assets/cc1fb6dd-a89e-4bbb-b3bd-45b8ee7474c5" width="100%"></td>
+</tr>
+<tr>    
+<td><img src="https://github.com/user-attachments/assets/65850734-de0c-4fda-b6a6-94af1e3957b4" width="100%"></td>
+    <td><img src="https://github.com/user-attachments/assets/e0d28c95-8533-4ab4-9b60-9795a650e527" width="100%"></td>
+</tr>
+<tr>    
+<td><img src="https://github.com/user-attachments/assets/4d01992e-378c-403f-ba28-b6f4582ba96e" width="100%"></td>
+    <td><img src="https://github.com/user-attachments/assets/056196f0-e118-41d6-83ce-fd59fa9bc61c" width="100%"></td>
+  </tr>
+</table>
 
-**Wemo Ops Provisioner**
-
-<img width="1372" height="1035" alt="provisioner_v4 1 7" src="https://github.com/user-attachments/assets/1634a3af-420d-4028-b2c4-4bcd8a8e5ae8" />
-
-**Wemo Ops Automation**
-
-<img width="1366" height="1035" alt="automation_v4 1 7" src="https://github.com/user-attachments/assets/d2d4a04f-dfe1-4fa1-8821-57043ed2317a" />
-
-**Wemo Ops Maintenance**
-
-<img width="1370" height="1035" alt="maintenance_v4 1 7" src="https://github.com/user-attachments/assets/2cfb0f7d-6b48-44d9-bb46-45b4d1fdb8da" />
 
 
 
 ---
-**Go to the [Releases Page](../../releases) and download `WemoOps_v4.1.7.exe`.**
+**Go to the [Releases Page](../../releases) and download.**
 ## 🚀 Key Features (v4.1.7)
 
 ### 1. 📡 Universal Provisioner
