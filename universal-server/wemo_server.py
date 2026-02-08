@@ -520,8 +520,19 @@ HTML_TEMPLATE = """
 </html>
 """
 
-if __name__ == "__main__":
-    settings = load_json(SETTINGS_FILE, {})
+# --- STARTUP ---
+settings = load_json(SETTINGS_FILE, {})
+
+def _start_background():
     threading.Thread(target=scanner_loop, daemon=True).start()
     threading.Thread(target=scheduler_loop, daemon=True).start()
+    logger.info("Background threads started (scanner, scheduler)")
+
+# Gunicorn (Docker) — __main__ is never reached, so start threads at import time
+if "gunicorn" in os.environ.get("SERVER_SOFTWARE", ""):
+    _start_background()
+
+# Flask dev server (native install)
+if __name__ == "__main__":
+    _start_background()
     app.run(host=HOST, port=PORT, debug=False)
