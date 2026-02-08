@@ -148,7 +148,7 @@ chmod +x "$STAGING/Install_WemoOps.command"
 
 # 6. GENERATE DMG
 echo "[4/5] Generating DMG..."
-DMG_NAME="${APP_NAME}_${VERSION}_Port5050.dmg"
+DMG_NAME="${APP_NAME}_${VERSION}_app.dmg"
 rm -f "dist/$DMG_NAME"
 hdiutil create -volname "$APP_NAME Installer" -srcfolder "$STAGING" -ov -format UDZO "dist/$DMG_NAME" >/dev/null
 
