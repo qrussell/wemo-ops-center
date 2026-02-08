@@ -13,7 +13,7 @@ from flask import Flask, render_template_string, jsonify, request
 
 # --- CONFIGURATION ---
 VERSION = "v1.0.1-Tabs"
-PORT = int(os.environ.get("PORT", 5000))
+PORT = int(os.environ.get("PORT", 5050))
 HOST = "0.0.0.0"
 SCAN_INTERVAL = int(os.environ.get("SCAN_INTERVAL", 300))
 
@@ -531,8 +531,16 @@ def _start_background():
 # Gunicorn (Docker) — __main__ is never reached, so start threads at import time
 if "gunicorn" in os.environ.get("SERVER_SOFTWARE", ""):
     _start_background()
+    print("----------------------------------------------------------------")
+    print(f"   WEMO OPS SERVER - LISTENING ON PORT {PORT}")
+    print("   (Port 5000 is reserved for AirPlay on macOS)")
+    print("----------------------------------------------------------------")
 
 # Flask dev server (native install)
 if __name__ == "__main__":
     _start_background()
     app.run(host=HOST, port=PORT, debug=False)
+    print("----------------------------------------------------------------")
+    print(f"   WEMO OPS SERVER - LISTENING ON PORT {PORT}")
+    print("   (Port 5000 is reserved for AirPlay on macOS)")
+    print("----------------------------------------------------------------")

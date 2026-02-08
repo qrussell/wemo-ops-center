@@ -16,4 +16,4 @@ ln -sfn /data /home/wemo/.local/share/WemoOps
 chown -R "$PUID:$PGID" /data /home/wemo
 
 # Drop privileges and run
-exec gosu wemo gunicorn -w 1 -b "0.0.0.0:${PORT:-5000}" --log-level info wemo_server:app
+exec gosu wemo gunicorn -w 1 -b "0.0.0.0:${PORT:-5050}" --log-level info wemo_server:app
