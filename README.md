@@ -123,6 +123,11 @@ sudo apt install wemo-ops       # Ubuntu / Debian
 
 Wemo Ops Server is a lightweight, headless service designed to run on a Raspberry Pi, VM, or Home Server. It provides a Web UI accessible from any device on your network and executes automation schedules even when your computer is turned off.  
 
+### Supported deployments:
+* RHEL/Rocky/Fedora [Wemo Ops Server Wiki Page](https://github.com/qrussell/wemo-ops-center/wiki/Wemo-Ops-Server)
+* Debian/Ubuntu [Wemo Ops Server Wiki Page](https://github.com/qrussell/wemo-ops-center/wiki/Wemo-Ops-Server)
+* Docker (see code section [universal-server](https://github.com/qrussell/wemo-ops-center/tree/main/universal-server) )
+
 Visit the Wemo Ops Server wiki page [Wemo Ops Server Wiki Page](https://github.com/qrussell/wemo-ops-center/wiki/Wemo-Ops-Server)
 <table>
   <tr>
