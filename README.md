@@ -161,6 +161,9 @@ sudo dnf install wemo-ops-server  # Fedora / Rocky
 ```bash
 sudo apt install wemo-ops-server  # Ubuntu / Debian
 ```
+## Installation instructions for Wemo Ops Server 
+### Debian/Ubuntu or RHEL/Rocky/Fedora Instructions on the Wiki Page:
+* Visit the Wemo Ops Server wiki page [Wemo Ops Server Wiki Page](https://github.com/qrussell/wemo-ops-center/wiki/Wemo-Ops-Server)
 ## 🤝 Better Together: The Hybrid Approach
 "Can I use both?" Yes! In fact, this is the most powerful way to use Wemo Ops.
 

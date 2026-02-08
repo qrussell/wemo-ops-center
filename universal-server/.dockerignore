@@ -1,0 +1,12 @@
+build_deb_server/
+build_rpm_server/
+dist/
+*.deb
+*.rpm
+__pycache__/
+*.pyc
+.venv/
+.git/
+*.md
+build_deb_server.sh
+build_rpm_server.sh
