@@ -204,6 +204,8 @@ systemctl daemon-reload
 systemctl enable wemo-ops-server
 echo "--------------------------------------------------------"
 echo "✅ Wemo Ops installed successfully!"
+echo "   👉 Client: Run 'wemo-ops' or check App Menu"
+echo "   👉 Server: Run 'sudo systemctl start wemo-ops-server'"
 echo "--------------------------------------------------------"
 
 %preun
