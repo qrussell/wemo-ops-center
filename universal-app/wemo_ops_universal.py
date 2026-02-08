@@ -20,13 +20,13 @@ import pyperclip
 # --- QR Code Support ---
 try:
     import qrcode
-    from PIL import ImageTk
+    from PIL import Image
     HAS_QR = True
 except ImportError:
     HAS_QR = False
 
 # --- CONFIGURATION ---
-VERSION = "v5.1.0-WiFi"
+VERSION = "v5.1.4-app"
 SERVER_URL = "http://localhost:5000"
 UPDATE_API_URL = "https://api.github.com/repos/qrussell/wemo-ops-center/releases/latest"
 UPDATE_PAGE_URL = "https://github.com/qrussell/wemo-ops-center/releases"
@@ -94,16 +94,23 @@ class APIClient:
     def __init__(self):
         self.connected = False
         self.server_ip = "127.0.0.1"
+        self.remote_scan_status = ""
 
     def check_connection(self):
         try:
             r = requests.get(f"{SERVER_URL}/api/status", timeout=0.5)
             if r.status_code == 200:
                 self.connected = True
+                data = r.json()
+                self.remote_scan_status = data.get("scan_status", "")
                 return True
         except: pass
         self.connected = False
         return False
+
+    def trigger_scan(self):
+        try: requests.post(f"{SERVER_URL}/api/scan", timeout=1)
+        except: pass
 
     def get_devices(self):
         try: return requests.get(f"{SERVER_URL}/api/devices", timeout=2).json()
@@ -220,20 +227,17 @@ class NetworkUtils:
         return [ssid for ssid in list(set(wemos)) if "wemo" in ssid.lower() or "belkin" in ssid.lower()]
 
 # ==============================================================================
-#  WIFI AUTOMATOR (CONNECT BUTTON LOGIC)
+#  WIFI AUTOMATOR
 # ==============================================================================
 class WifiAutomator:
     @staticmethod
     def can_automate():
-        """Returns True if we have a strategy to connect on this OS."""
         return sys.platform in ["win32", "linux", "darwin"]
 
     @staticmethod
     def connect_open_network(ssid):
-        """Attempts to connect to an Open (No Password) Wemo network."""
         try:
             if sys.platform == "win32":
-                # Windows requires a profile XML for 'netsh' to connect, even for open networks.
                 hex_ssid = ssid.encode('utf-8').hex()
                 xml_content = f"""<?xml version="1.0"?>
 <WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
@@ -256,27 +260,19 @@ class WifiAutomator:
         </security>
     </MSM>
 </WLANProfile>"""
-                # Write Temp File
                 fd, path = tempfile.mkstemp(suffix=".xml")
                 with os.fdopen(fd, 'w') as tmp:
                     tmp.write(xml_content)
-                
-                # Add Profile & Connect
                 subprocess.run(['netsh', 'wlan', 'add', 'profile', f'filename={path}'], check=True, creationflags=0x08000000)
-                os.remove(path) # Cleanup
+                os.remove(path)
                 subprocess.run(['netsh', 'wlan', 'connect', f'name={ssid}'], check=True, creationflags=0x08000000)
                 return True
-
             elif sys.platform.startswith("linux"):
-                # nmcli is standard on most desktop distros
                 subprocess.run(['nmcli', 'dev', 'wifi', 'connect', ssid], check=True)
                 return True
-
             elif sys.platform == "darwin":
-                # macOS
                 subprocess.run(['networksetup', '-setairportnetwork', 'en0', ssid], check=True)
                 return True
-
         except Exception as e:
             print(f"Connection Failed: {e}")
             return False
@@ -506,7 +502,12 @@ class WemoOpsApp(ctk.CTk):
     def _update_heartbeat_ui(self, is_online):
         self.use_api_mode = is_online
         if is_online:
-            self.svc_status.configure(text="✅ CONNECTED", text_color=COLOR_SUCCESS)
+            txt = "✅ CONNECTED"
+            # Add scanning indicator if server is busy
+            if "Scanning" in self.api.remote_scan_status:
+                txt += "\n(Scanning...)"
+            
+            self.svc_status.configure(text=txt, text_color=COLOR_SUCCESS)
         else:
             self.svc_status.configure(text="⚠️ STANDALONE", text_color="orange")
 
@@ -634,14 +635,21 @@ class WemoOpsApp(ctk.CTk):
 
     def refresh_network(self):
         if self.use_api_mode:
-            self.scan_status.configure(text="Fetching from Server...")
-            threading.Thread(target=self._fetch_api_devices, daemon=True).start()
+            # --- FIX: Trigger Remote Scan ---
+            self.scan_status.configure(text="Requesting Server Scan...")
+            threading.Thread(target=self._trigger_remote_scan, daemon=True).start()
         else:
             self.known_devices_map.clear()
             for w in self.dev_list.winfo_children(): w.destroy()
             manual_subnet = self.subnet_combo.get().strip()
             self.scan_status.configure(text="Local Scanning...")
             threading.Thread(target=self._scan_thread, args=(manual_subnet,), daemon=True).start()
+
+    def _trigger_remote_scan(self):
+        self.api.trigger_scan()
+        # Wait briefly for scan to initiate, then fetch whatever is currently known
+        time.sleep(1)
+        self._fetch_api_devices()
 
     def _fetch_api_devices(self):
         devs = self.api.get_devices()
@@ -1093,7 +1101,7 @@ class WemoOpsApp(ctk.CTk):
         
         if not current_data: ctk.CTkLabel(self.job_list_frame, text="No schedules.", text_color="gray").pack(); return
         days_map = ["M", "T", "W", "Th", "F", "Sa", "Su"]
-        for job in current_data:
+        for job in self.schedules:
             row = ctk.CTkFrame(self.job_list_frame, fg_color=COLOR_FRAME)
             row.pack(fill="x", pady=2)
             d_str = "".join([days_map[i] for i in job['days']])
@@ -1308,65 +1316,64 @@ class WemoOpsApp(ctk.CTk):
         self.log_prov("Manual Override engaged. Assuming IP 10.22.22.1.")
 
     def show_qr_code(self):
-        # 1. Get the correct URL
-        if self.use_api_mode:
-            # If server is running, use its IP
-            try:
-                ip = NetworkUtils.get_local_ip()
-                url = f"http://{ip}:5000"
-            except:
-                url = "http://localhost:5000"
-        else:
-            # If standalone, try to guess where it WOULD be if they started the server
-            try:
-                ip = NetworkUtils.get_local_ip()
-                url = f"http://{ip}:5000"
-            except:
-                url = "http://localhost:5000"
-
-        # 2. Generate QR Code
-        qr = qrcode.QRCode(box_size=10, border=4)
-        qr.add_data(url)
-        qr.make(fit=True)
-        img = qr.make_image(fill_color="black", back_color="white")
-        
-        # 3. Create Popup Window
-        win = ctk.CTkToplevel(self) # Parent is 'self' (the main app)
-        win.title("Mobile App")
-        win.geometry("400x480")
-        
-        # --- FIX: FORCE ON TOP & CENTER ---
-        win.attributes('-topmost', True) # Keep on top
-        win.lift()                       # Bring to front immediately
-        win.focus_force()                # Grab focus
-        
-        # Calculate center relative to main window
         try:
-            main_x = self.winfo_x()
-            main_y = self.winfo_y()
-            main_w = self.winfo_width()
-            main_h = self.winfo_height()
-            
-            # Center coordinates
-            pos_x = main_x + (main_w // 2) - (400 // 2)
-            pos_y = main_y + (main_h // 2) - (480 // 2)
-            
-            win.geometry(f"400x480+{pos_x}+{pos_y}")
-        except: pass # Fallback to default position if calc fails
+            # 1. Get correct URL
+            if self.use_api_mode:
+                try: ip = NetworkUtils.get_local_ip(); url = f"http://{ip}:5000"
+                except: url = "http://localhost:5000"
+            else:
+                try: ip = NetworkUtils.get_local_ip(); url = f"http://{ip}:5000"
+                except: url = "http://localhost:5000"
 
-        # 4. Content
-        tk_img = ImageTk.PhotoImage(img)
-        lbl_img = ctk.CTkLabel(win, image=tk_img, text="")
-        lbl_img.pack(padx=20, pady=(30, 20))
-        
-        ctk.CTkLabel(win, text="Scan to Control on Mobile", font=("Arial", 16, "bold")).pack(pady=(0,5))
-        
-        # Clickable Link
-        link_lbl = ctk.CTkLabel(win, text=url, text_color="gray", cursor="hand2", font=("Consolas", 14, "underline"))
-        link_lbl.pack(pady=(0,20))
-        link_lbl.bind("<Button-1>", lambda e: webbrowser.open(url))
-        
-        ctk.CTkButton(win, text="Close", command=win.destroy, fg_color="gray").pack(pady=10)
+            # 2. Generate QR Data
+            qr = qrcode.QRCode(box_size=10, border=4)
+            qr.add_data(url)
+            qr.make(fit=True)
+            
+            # --- FIX: Convert to RGB for CTkImage ---
+            img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+            
+            # --- FIX: Use Native CTkImage Object ---
+            qr_ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(250, 250))
+            
+            # 3. Create Window
+            win = ctk.CTkToplevel(self) 
+            win.title("Mobile App")
+            win.geometry("400x480")
+            
+            # --- FIX: Linux Window Logic ---
+            win.transient(self) # Keep on top of parent
+            win.update()        # Force render calculation
+            
+            # Center on Main Window
+            try:
+                main_x = self.winfo_x(); main_y = self.winfo_y()
+                main_w = self.winfo_width(); main_h = self.winfo_height()
+                pos_x = main_x + (main_w // 2) - (400 // 2)
+                pos_y = main_y + (main_h // 2) - (480 // 2)
+                win.geometry(f"400x480+{pos_x}+{pos_y}")
+            except: pass
+            
+            try: win.attributes('-topmost', True)
+            except: pass
+            
+            win.focus_force()
+
+            # 4. Content
+            lbl_img = ctk.CTkLabel(win, image=qr_ctk_img, text="")
+            lbl_img.pack(padx=20, pady=(30, 20))
+            lbl_img.image = qr_ctk_img # Keep Reference!
+            
+            ctk.CTkLabel(win, text="Scan to Control on Mobile", font=("Arial", 16, "bold")).pack(pady=(0,5))
+            
+            link_lbl = ctk.CTkLabel(win, text=url, text_color="gray", cursor="hand2", font=("Consolas", 14, "underline"))
+            link_lbl.pack(pady=(0,20))
+            link_lbl.bind("<Button-1>", lambda e: webbrowser.open(url))
+            
+            ctk.CTkButton(win, text="Close", command=win.destroy, fg_color="gray").pack(pady=10)
+            
+        except Exception as e:
+            messagebox.showerror("QR Error", f"Failed to show QR Code:\n{e}")
 
 if __name__ == "__main__":
     app = WemoOpsApp()
