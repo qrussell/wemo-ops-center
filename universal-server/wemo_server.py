@@ -35,6 +35,8 @@ SETTINGS_FILE = os.path.join(APP_DATA_DIR, "settings.json")
 # --- LOGGING ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("WemoServer")
+logging.getLogger("pywemo").setLevel(logging.CRITICAL)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 app = Flask(__name__)
 
