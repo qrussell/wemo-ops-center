@@ -8,6 +8,8 @@ services:
       - PUID=1000
       - PGID=1000
       - TZ=America/New_York
+      - PORT=5000
+      - SCAN_INTERVAL=300
     volumes:
       - wemo-data:/data
 
