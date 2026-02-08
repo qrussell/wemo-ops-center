@@ -26,7 +26,7 @@ except ImportError:
     HAS_QR = False
 
 # --- CONFIGURATION ---
-VERSION = "v5.1.4-app"
+VERSION = "v5.1.4-App"
 SERVER_URL = "http://localhost:5000"
 UPDATE_API_URL = "https://api.github.com/repos/qrussell/wemo-ops-center/releases/latest"
 UPDATE_PAGE_URL = "https://github.com/qrussell/wemo-ops-center/releases"
