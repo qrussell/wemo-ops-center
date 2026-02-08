@@ -13,7 +13,7 @@ from flask import Flask, render_template_string, jsonify, request
 
 # --- CONFIGURATION ---
 VERSION = "v1.0.1-Tabs"
-PORT = 5000
+PORT = int(os.environ.get("PORT", 5000))
 HOST = "0.0.0.0"
 
 # --- PATH SETUP ---
