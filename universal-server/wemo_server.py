@@ -13,8 +13,9 @@ from flask import Flask, render_template_string, jsonify, request
 
 # --- CONFIGURATION ---
 VERSION = "v1.0.1-Tabs"
-PORT = 5000
+PORT = int(os.environ.get("PORT", 5000))
 HOST = "0.0.0.0"
+SCAN_INTERVAL = int(os.environ.get("SCAN_INTERVAL", 300))
 
 # --- PATH SETUP ---
 if sys.platform == "win32":
@@ -35,6 +36,8 @@ SETTINGS_FILE = os.path.join(APP_DATA_DIR, "settings.json")
 # --- LOGGING ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("WemoServer")
+logging.getLogger("pywemo").setLevel(logging.CRITICAL)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 app = Flask(__name__)
 
@@ -99,12 +102,11 @@ def get_solar_times():
 # --- DEEP SCANNER ---
 class DeepScanner:
     def probe_port(self, ip, port=49153, timeout=0.2):
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(timeout)
         try:
-            s.connect((str(ip), port))
-            s.close()
-            return str(ip)
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(timeout)
+                s.connect((str(ip), port))
+                return str(ip)
         except: return None
 
     def scan_subnet(self, subnets):
@@ -160,7 +162,7 @@ def scanner_loop():
         except Exception as e:
             logger.error(f"Scan error: {e}")
             scan_status = "Error"
-        time.sleep(300) # Auto-scan every 5 mins
+        time.sleep(SCAN_INTERVAL)
 
 def scheduler_loop():
     while True:
@@ -518,8 +520,19 @@ HTML_TEMPLATE = """
 </html>
 """
 
-if __name__ == "__main__":
-    settings = load_json(SETTINGS_FILE, {})
+# --- STARTUP ---
+settings = load_json(SETTINGS_FILE, {})
+
+def _start_background():
     threading.Thread(target=scanner_loop, daemon=True).start()
     threading.Thread(target=scheduler_loop, daemon=True).start()
+    logger.info("Background threads started (scanner, scheduler)")
+
+# Gunicorn (Docker) — __main__ is never reached, so start threads at import time
+if "gunicorn" in os.environ.get("SERVER_SOFTWARE", ""):
+    _start_background()
+
+# Flask dev server (native install)
+if __name__ == "__main__":
+    _start_background()
     app.run(host=HOST, port=PORT, debug=False)
