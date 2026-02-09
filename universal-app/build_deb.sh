@@ -2,7 +2,7 @@
 
 # ==============================================================================
 #  WEMO OPS - MASTER BUILDER (DEB / Debian / Ubuntu / Raspberry Pi)
-#  Version: 5.1.6-App (Auto-Start & Firewall)
+#  Version: 5.2.3-Stable
 # ==============================================================================
 
 # --- CRITICAL: Stop immediately if any command fails ---
@@ -11,7 +11,7 @@ set -e
 # --- CONFIGURATION ---
 APP_NAME="WemoOps"
 SAFE_NAME="wemo-ops"
-VERSION="5.1.6"
+VERSION="5.2.3"
 ARCH="amd64"     # Change to 'arm64' if building on Raspberry Pi
 MAINTAINER="Quentin Russell <quentin@quentinrussell.com>"
 DESC="Wemo Ops Center - Automation Server and Client"
