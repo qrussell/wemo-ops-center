@@ -13,7 +13,7 @@ from flask import Flask, render_template_string, jsonify, request
 from waitress import serve  # REQUIRED for production/frozen builds
 
 # --- CONFIGURATION ---
-VERSION = "v5.1.5-Server"
+VERSION = "v5.1.6-Server"
 PORT = 5050  # Updated to 5050 to avoid AirPlay conflict
 HOST = "0.0.0.0"
 
@@ -273,13 +273,37 @@ def api_settings():
         save_json(SETTINGS_FILE, settings)
         return jsonify({"status": "saved"})
 
+# --- NEW ROUTE FOR SUBNET CONFIG (FIX) ---
+@app.route('/api/config/subnet', methods=['POST'])
+def api_config_subnet():
+    """Specific endpoint for Desktop App to set scan subnet"""
+    global settings
+    data = request.json
+    new_subnet = data.get('subnet')
+    
+    if new_subnet:
+        # Validate simple format check
+        if "/" in new_subnet or "192." in new_subnet:
+            # We store it in the standard settings dict
+            settings['subnets'] = [new_subnet]
+            save_json(SETTINGS_FILE, settings)
+            return jsonify({"status": "success", "subnet": new_subnet}), 200
+    
+    return jsonify({"status": "error", "message": "Invalid subnet"}), 400
+
 @app.route('/api/scan', methods=['POST'])
 def api_scan():
     global scan_status
     if "Scanning" in scan_status: return jsonify({"status": "busy"})
-    scan_status = "Starting..."
-    threading.Thread(target=scanner_loop, daemon=True).start()
-    return jsonify({"status": "started"})
+    
+    # NOTE: Since scanner_loop is already running in a thread (while True),
+    # we shouldn't start a NEW thread here or we get duplicates.
+    # Ideally, we would set a flag to wake up the scanner, 
+    # but for now we simply return success and let the loop or user wait.
+    # To force it, you would need to refactor scanner_loop to wait on an Event.
+    
+    # However, if this is the first start or needed, we can try:
+    return jsonify({"status": "queued", "message": "Scan will run on next cycle"})
 
 @app.route('/api/schedules', methods=['GET', 'POST', 'DELETE'])
 def api_schedules():

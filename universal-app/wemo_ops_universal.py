@@ -119,6 +119,13 @@ class APIClient:
         try: requests.post(f"{SERVER_URL}/api/scan", timeout=1)
         except: pass
 
+    def set_server_subnet(self, subnet_cidr):
+        """Pushes the target subnet to the server for deep scanning."""
+        try:
+            r = requests.post(f"{SERVER_URL}/api/config/subnet", json={"subnet": subnet_cidr}, timeout=2)
+            return r.status_code == 200
+        except: return False
+
     def get_devices(self):
         try: return requests.get(f"{SERVER_URL}/api/devices", timeout=2).json()
         except: return []
@@ -694,6 +701,17 @@ class WemoOpsApp(ctk.CTk):
             self.settings["subnets"] = self.saved_subnets
             self.save_json(SETTINGS_FILE, self.settings)
             self.subnet_combo.configure(values=self.saved_subnets)
+        
+        # --- SYNC TO SERVER ---
+        if self.use_api_mode and val:
+            threading.Thread(target=self._sync_subnet_task, args=(val,), daemon=True).start()
+
+    def _sync_subnet_task(self, val):
+        if self.api.set_server_subnet(val):
+            # Optimistic update - nothing visual needed unless failure
+            pass
+        else:
+            print("Warning: Failed to sync subnet to server.")
 
     def delete_subnet(self):
         val = self.subnet_combo.get().strip()
@@ -718,8 +736,15 @@ class WemoOpsApp(ctk.CTk):
             threading.Thread(target=self._scan_thread, args=(manual_subnet,), daemon=True).start()
 
     def _trigger_remote_scan(self):
+        # 1. Push config if available (ensure server has latest scan target)
+        val = self.subnet_combo.get().strip()
+        if val:
+            self.api.set_server_subnet(val)
+            
+        # 2. Trigger Scan
         self.api.trigger_scan()
-        # Wait briefly for scan to initiate, then fetch whatever is currently known
+        
+        # 3. Wait briefly for scan to initiate, then fetch whatever is currently known
         time.sleep(1)
         self._fetch_api_devices()
 
