@@ -135,10 +135,9 @@ class NetworkUtils:
         return [ssid for ssid in list(set(wemos)) if "wemo" in ssid.lower() or "belkin" in ssid.lower()]
 
 # ==============================================================================
-#  DEEP SCANNER (IMPROVED)
+#  DEEP SCANNER
 # ==============================================================================
 class DeepScanner:
-    # UPDATED: Checks multiple ports (49152-49155) with longer timeout (0.6s)
     def probe_port(self, ip, ports=[49152, 49153, 49154, 49155], timeout=0.6):
         for port in ports:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -161,7 +160,6 @@ class DeepScanner:
         if status_callback: status_callback(f"Probing {len(all_hosts)} IPs (Deep)...")
         
         active_ips = []
-        # UPDATED: Increased workers to 60 to handle longer timeouts
         with concurrent.futures.ThreadPoolExecutor(max_workers=60) as executor:
             futures = {executor.submit(self.probe_port, ip): ip for ip in all_hosts}
             for future in concurrent.futures.as_completed(futures):
@@ -171,24 +169,20 @@ class DeepScanner:
         if status_callback: status_callback(f"Verifying {len(active_ips)} hosts...")
         
         for ip in active_ips:
-            # UPDATED: Try fetching setup.xml from ALL common Wemo ports
             for port in [49152, 49153, 49154, 49155]:
                 try:
                     url = f"http://{ip}:{port}/setup.xml"
                     dev = pywemo.discovery.device_from_description(url)
                     if dev: 
                         found_devices.append(dev)
-                        break # Found it, stop checking ports for this IP
+                        break 
                 except: pass
         return found_devices
 
 class SolarEngine:
     def __init__(self):
-        self.lat = None
-        self.lng = None
-        self.solar_times = {} 
-        self.last_fetch = None
-
+        self.lat = None; self.lng = None; self.solar_times = {}; self.last_fetch = None
+    
     def detect_location(self):
         try:
             r = requests.get("https://ipinfo.io/json", timeout=2)
@@ -282,7 +276,7 @@ class WemoOpsApp(ctk.CTk):
         self.title(f"Wemo Ops Center {VERSION}")
         self.geometry("1100x800")
         
-        # [FIXED] Icon setup with clean indentation
+        # Icon setup
         self.set_icon(self)
 
         self.grid_columnconfigure(1, weight=1)
@@ -294,7 +288,8 @@ class WemoOpsApp(ctk.CTk):
         self.schedules = self.load_json(SCHEDULE_FILE, list) or []
         self.saved_subnets = self.settings.get("subnets", [])
         
-        self.known_devices_map = {} 
+        self.known_devices_map = {}
+        self.device_switches = {} # [NEW] Track switches for live updates
         self.last_rendered_device_names = [] 
         self.solar = SolarEngine()
         self.scanner = DeepScanner()
@@ -354,6 +349,10 @@ class WemoOpsApp(ctk.CTk):
         threading.Thread(target=self._connection_monitor, daemon=True).start()
         threading.Thread(target=self._scheduler_engine, daemon=True).start()
         threading.Thread(target=self.run_update_check, daemon=True).start()
+        
+        # [NEW] Start State Poller for Live Updates
+        threading.Thread(target=self._state_poller, daemon=True).start()
+        
         self.server_heartbeat()
 
     # --- HELPERS ---
@@ -368,6 +367,20 @@ class WemoOpsApp(ctk.CTk):
     def set_ui_scale(self, s):
         try: ctk.set_widget_scaling(int(str(s).replace("%", ""))/100)
         except: pass
+    def set_icon(self, window):
+        try:
+            if getattr(sys, 'frozen', False):
+                base_path = sys._MEIPASS
+            else:
+                base_path = os.path.dirname(os.path.abspath(__file__))
+            
+            icon_path = os.path.join(base_path, "images", "app_icon.ico")
+            
+            if os.path.exists(icon_path):
+                window.iconbitmap(icon_path)
+        except Exception:
+            pass
+
     def create_nav_btn(self, text, view_name):
         btn = ctk.CTkButton(self.sidebar, text=f"  {text}", anchor="w", 
                             font=FONT_BODY, height=40,
@@ -396,24 +409,7 @@ class WemoOpsApp(ctk.CTk):
         except: pass
         self.after(5000, self.server_heartbeat)
 
-    def set_icon(self, window):
-        #"""Applies the app icon to any given window."""
-        try:
-            if getattr(sys, 'frozen', False):
-                # Running as compiled EXE: Look in _MEIPASS/images/
-                base_path = os.path.join(sys._MEIPASS, "images")
-            else:
-                # Running as Script: Look in current_dir/images/
-                base_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images")
-            
-            icon_path = os.path.join(base_path, "app_icon.ico")
-            
-            # Apply icon if file exists
-            if os.path.exists(icon_path):
-                window.iconbitmap(icon_path)
-        except Exception:
-            pass
-			
+    # --- DASHBOARD (LIVE UPDATE SUPPORT) ---
     def create_dashboard(self):
         f = ctk.CTkFrame(self.content, fg_color="transparent"); self.frames["dash"] = f
         
@@ -452,7 +448,6 @@ class WemoOpsApp(ctk.CTk):
         # Device List
         self.dev_list = ctk.CTkScrollableFrame(f, label_text="Devices", label_text_color=COLOR_TEXT); self.dev_list.pack(fill="both", expand=True)
 
-    # --- SUBNET MANAGEMENT ---
     def save_subnet(self):
         s = self.subnet_combo.get().strip()
         if s and s not in self.saved_subnets:
@@ -503,6 +498,9 @@ class WemoOpsApp(ctk.CTk):
         self.run_local_scan()
 
     def render_devices(self):
+        # [NEW] Clear switch registry on redraw
+        self.device_switches = {}
+        
         current_names = sorted(list(self.known_devices_map.keys()))
         if current_names == self.last_rendered_device_names: return 
         self.last_rendered_device_names = current_names
@@ -528,6 +526,9 @@ class WemoOpsApp(ctk.CTk):
         
         def tog(d=dev): threading.Thread(target=d.toggle, daemon=True).start()
         sw = ctk.CTkSwitch(t, text="Power", command=tog, text_color=COLOR_TEXT); sw.pack(side="right")
+        
+        # [NEW] Register Switch for Live Updates
+        self.device_switches[dev.name] = sw
         
         try:
             state = dev.get_state(force_update=False) 
@@ -567,7 +568,39 @@ class WemoOpsApp(ctk.CTk):
                 else: self.after(0, lambda: messagebox.showwarning("Error", "No Code Found"))
         except: pass
 
-    # --- PROVISIONER (CRASH FIXED: Added Missing Profile Methods) ---
+    # --- STATE POLLER (NEW) ---
+    def _state_poller(self):
+        while self.monitoring:
+            try:
+                # Don't poll if dashboard isn't visible (save resources)
+                try:
+                    if not self.frames["dash"].winfo_ismapped():
+                        time.sleep(2)
+                        continue
+                except: pass
+
+                # Cycle through known devices
+                for name, dev in self.known_devices_map.items():
+                    if name in self.device_switches:
+                        try:
+                            # FORCE UPDATE from physical device
+                            state = dev.get_state(force_update=True)
+                            
+                            # Safe UI Update on Main Thread
+                            self.after(0, lambda n=name, s=state: self._update_switch_safe(n, s))
+                        except: pass
+            except: pass
+            time.sleep(2) # 2 Second Refresh Rate
+
+    def _update_switch_safe(self, name, state):
+        if name in self.device_switches:
+            try:
+                sw = self.device_switches[name]
+                if state: sw.select()
+                else: sw.deselect()
+            except: pass
+
+    # --- PROVISIONER ---
     def create_provisioner(self):
         f = ctk.CTkFrame(self.content, fg_color="transparent"); self.frames["prov"] = f
         f.columnconfigure(0, weight=1); f.columnconfigure(1, weight=2); f.rowconfigure(0, weight=1)
@@ -665,7 +698,7 @@ class WemoOpsApp(ctk.CTk):
         if success: self.log_prov(f"Success: Connected to {ssid}")
         else: self.log_prov(f"Failed to connect to {ssid}. Try manual connection.")
 
-    # --- MISSING PROFILE METHODS ADDED HERE ---
+    # --- MISSING PROFILE METHODS ---
     def apply_profile(self, c):
         if c in self.profiles:
             self.ssid_entry.delete(0, "end")
@@ -950,13 +983,15 @@ class WemoOpsApp(ctk.CTk):
     # --- QR CODE ---
     def show_qr_code(self):
         try:
-            # Generate QR Logic
+            # Generate QR for Local IP + Server Port
             ip = NetworkUtils.get_local_ip()
             url = f"http://{ip}:{SERVER_PORT}"
             
             qr = qrcode.QRCode(box_size=10, border=4)
             qr.add_data(url)
             qr.make(fit=True)
+            
+            # Use native RGB conversion for CTkImage
             img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
             qr_ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(250, 250))
             
