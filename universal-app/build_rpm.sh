@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==============================================================================
-#  WEMO OPS - MASTER BUILDER (RPM / Linux)
+#  WEMO OPS - MASTER BUILDER (RPM / Rocky / Fedora / RHEL)
 #  Version: 5.1.6-App
 # ==============================================================================
 
@@ -38,10 +38,17 @@ if ! command -v rpmbuild &> /dev/null; then
     exit 1
 fi
 
-if command -v python3.11 &> /dev/null; then
-    PYTHON_BIN="python3.11"
-else
-    echo "❌ ERROR: Python 3.11 is required but not found."
+# FIND COMPATIBLE PYTHON (Must be 3.10+)
+PYTHON_BIN=""
+for p in python3.12 python3.11 python3.10; do
+    if command -v $p &> /dev/null; then
+        PYTHON_BIN=$p
+        break
+    fi
+done
+
+if [ -z "$PYTHON_BIN" ]; then
+    echo "❌ ERROR: Python 3.10+ is required but not found."
     echo "👉 ACTION: Run 'sudo dnf install python3.11 python3.11-devel'"
     exit 1
 fi
@@ -50,23 +57,21 @@ echo "   > Using Python: $PYTHON_BIN"
 # 3. COMPILE BINARIES
 echo "[2/5] Compiling Binaries..."
 
-if [ -d ".venv" ]; then
-    rm -rf .venv
-fi
+if [ -d ".venv" ]; then rm -rf .venv; fi
 
 $PYTHON_BIN -m venv .venv
 source .venv/bin/activate
 
 echo "   > Installing Python libraries..."
-pip install --upgrade pip
-pip install "pywemo>=2.1.1" customtkinter requests pyinstaller pyperclip Pillow flask qrcode waitress
+pip install --upgrade pip --quiet
+# Force binary preference to avoid compilation issues on Linux
+pip install "pywemo>=2.1.1" customtkinter requests pyinstaller pyperclip Pillow flask qrcode waitress --quiet --prefer-binary
 
 rm -rf dist/rpm_build
 rm -f dist/*.rpm
 
 # A. Build Client (GUI)
 echo "   > Compiling Client ($CLIENT_SCRIPT)..."
-# FIX: Added hidden imports for PIL._tkinter_finder and PIL.ImageTk
 pyinstaller --noconfirm --onefile --windowed \
     --name "wemo-ops-client" \
     --collect-all customtkinter \
@@ -199,13 +204,32 @@ $INSTALL_DIR
 /usr/lib/systemd/system/wemo-ops-server.service
 
 %post
+# 1. Update Desktop Database
 update-desktop-database &> /dev/null || :
+
+# 2. Configure Systemd (Enable and Start)
 systemctl daemon-reload
-systemctl enable wemo-ops-server
+systemctl enable --now wemo-ops-server
+
+# 3. Configure Firewall (Open Ports)
+if command -v firewall-cmd &> /dev/null; then
+    if systemctl is-active --quiet firewalld; then
+        echo "🔥 Wemo Ops: Configuring Firewall Ports..."
+        # App UI
+        firewall-cmd --permanent --add-port=5000/tcp &> /dev/null || :
+        firewall-cmd --permanent --add-port=5050/tcp &> /dev/null || :
+        # Wemo Control
+        firewall-cmd --permanent --add-port=49152-49155/tcp &> /dev/null || :
+        # SSDP Discovery
+        firewall-cmd --permanent --add-port=1900/udp &> /dev/null || :
+        
+        firewall-cmd --reload &> /dev/null || :
+        echo "✅ Firewall Updated."
+    fi
+fi
+
 echo "--------------------------------------------------------"
 echo "✅ Wemo Ops installed successfully!"
-echo "   👉 Client: Run 'wemo-ops' or check App Menu"
-echo "   👉 Server: Run 'sudo systemctl start wemo-ops-server'"
 echo "--------------------------------------------------------"
 
 %preun
