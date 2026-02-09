@@ -2,7 +2,7 @@
 
 # ==============================================================================
 #  WEMO OPS - MASTER BUILDER (DEB / Debian / Ubuntu / Raspberry Pi)
-#  Version: 5.1.6-App
+#  Version: 5.1.6-App (Auto-Start & Firewall)
 # ==============================================================================
 
 # --- CRITICAL: Stop immediately if any command fails ---
@@ -34,39 +34,31 @@ echo "========================================="
 # 2. INSTALL BUILD DEPENDENCIES
 echo "[1/6] Checking Build Tools..."
 if [ -f /etc/debian_version ]; then
-    # We don't run sudo automatically to avoid blocking scripts, but check for tools
     if ! command -v dpkg-deb &> /dev/null; then
-        echo "❌ Error: dpkg-deb not found. Are you on Debian/Ubuntu?"
+        echo "❌ Error: dpkg-deb not found."
         exit 1
-    fi
-    # Ensure python venv is available
-    if ! command -v python3 &> /dev/null; then
-         echo "❌ Error: python3 is missing."
-         exit 1
     fi
 fi
 
 # 3. COMPILE BINARIES
 echo "[2/6] Compiling Binaries..."
 
-# Clean old environment
 if [ -d ".venv" ]; then rm -rf .venv; fi
 
-# Create Virtual Env (Uses system python3, usually 3.10+ on modern Ubuntu)
+# Create Virtual Env
 python3 -m venv .venv
 source .venv/bin/activate
 
 # Install dependencies
 echo "   > Installing Python libraries..."
-pip install --upgrade pip
-pip install "pywemo>=2.1.1" customtkinter requests pyinstaller pyperclip Pillow flask qrcode waitress
+pip install --upgrade pip --quiet
+pip install "pywemo>=2.1.1" customtkinter requests pyinstaller pyperclip Pillow flask qrcode waitress --quiet
 
 # Clean previous builds
 rm -rf build/ dist/
 
 # A. Build Client (GUI)
 echo "   > Compiling Client ($CLIENT_SCRIPT)..."
-# INCLUDES THE CRITICAL PILLOW FIXES FROM RPM BUILD
 pyinstaller --noconfirm --onefile --windowed \
     --name "wemo-ops-client" \
     --collect-all customtkinter \
@@ -100,11 +92,11 @@ fi
 echo "[3/6] Creating Package Structure..."
 rm -rf "$STAGING_DIR"
 mkdir -p "$STAGING_DIR/DEBIAN"
-mkdir -p "$STAGING_DIR$INSTALL_DIR"                  # /opt/WemoOps
+mkdir -p "$STAGING_DIR$INSTALL_DIR"
 mkdir -p "$STAGING_DIR$INSTALL_DIR/images"
-mkdir -p "$STAGING_DIR/usr/bin"                      # /usr/bin
-mkdir -p "$STAGING_DIR/usr/share/applications"       # Desktop Shortcut
-mkdir -p "$STAGING_DIR/usr/lib/systemd/system"       # Systemd Service (System-wide)
+mkdir -p "$STAGING_DIR/usr/bin"
+mkdir -p "$STAGING_DIR/usr/share/applications"
+mkdir -p "$STAGING_DIR/usr/lib/systemd/system"
 
 # 5. COPY FILES
 echo "[4/6] Copying Files..."
@@ -118,7 +110,7 @@ if [ -f "images/app_icon.ico" ]; then
     cp "images/app_icon.ico" "$STAGING_DIR$INSTALL_DIR/images/"
 fi
 
-# --- A. CLIENT WRAPPER (Fixes Display Issues) ---
+# --- A. CLIENT WRAPPER ---
 cat > "$STAGING_DIR/usr/bin/wemo-ops" <<WRAPPER
 #!/bin/bash
 export XLIB_SKIP_ARGB_VISUALS=1
@@ -159,7 +151,6 @@ WantedBy=multi-user.target
 SERVICE
 
 # --- E. CONTROL FILE ---
-# Estimates installed size in KB
 SIZE=$(du -s "$STAGING_DIR" | cut -f1)
 
 cat > "$STAGING_DIR/DEBIAN/control" <<CTRL
@@ -173,29 +164,48 @@ Installed-Size: $SIZE
 Depends: python3, python3-tk, fontconfig
 Description: $DESC
  Wemo Ops is a complete automation suite for Belkin Wemo devices.
- Includes background server and desktop dashboard.
 CTRL
 
-# --- F. POST INSTALL SCRIPT ---
+# --- F. POST INSTALL SCRIPT (THE FIX) ---
 cat > "$STAGING_DIR/DEBIAN/postinst" <<POST
 #!/bin/bash
-# Fix permissions
+set -e
+
+# 1. Fix Permissions
 chmod 755 $INSTALL_DIR/wemo-ops-client
 chmod 755 $INSTALL_DIR/wemo-ops-server
 
-# Update Desktop DB
+# 2. Update Desktop Database
 if command -v update-desktop-database > /dev/null; then
     update-desktop-database /usr/share/applications
 fi
 
-# Reload Systemd
-systemctl daemon-reload
-systemctl enable wemo-ops-server
+# 3. SERVICE AUTO-START (Critical Fix)
+# We check if systemd is running (to avoid errors in docker/chroot builds)
+if [ -d /run/systemd/system ]; then
+    echo "⚙️  Configuring Systemd Service..."
+    systemctl daemon-reload
+    systemctl enable wemo-ops-server
+    systemctl restart wemo-ops-server
+    echo "✅ Service Started."
+fi
+
+# 4. FIREWALL AUTO-CONFIG (UFW)
+if command -v ufw > /dev/null; then
+    if ufw status | grep -q "Status: active"; then
+        echo "🔥 Configuring UFW Firewall..."
+        ufw allow 5000/tcp comment 'WemoOps Web UI'
+        ufw allow 5050/tcp comment 'WemoOps Web UI Alt'
+        ufw allow 1900/udp comment 'Wemo SSDP Discovery'
+        ufw allow 49152:49155/tcp comment 'Wemo Control Ports'
+        ufw reload
+        echo "✅ Firewall Rules Applied."
+    fi
+fi
 
 echo "--------------------------------------------------------"
 echo "✅ Wemo Ops installed successfully!"
-echo "   👉 Client: Run 'wemo-ops' or check App Menu"
-echo "   👉 Server: Run 'sudo systemctl start wemo-ops-server'"
+echo "   Server is running at http://localhost:5050"
 echo "--------------------------------------------------------"
 POST
 chmod 755 "$STAGING_DIR/DEBIAN/postinst"
@@ -204,8 +214,10 @@ chmod 755 "$STAGING_DIR/DEBIAN/postinst"
 cat > "$STAGING_DIR/DEBIAN/prerm" <<PRE
 #!/bin/bash
 # Stop service before uninstall
-systemctl stop wemo-ops-server 2>/dev/null || true
-systemctl disable wemo-ops-server 2>/dev/null || true
+if [ -d /run/systemd/system ]; then
+    systemctl stop wemo-ops-server 2>/dev/null || true
+    systemctl disable wemo-ops-server 2>/dev/null || true
+fi
 PRE
 chmod 755 "$STAGING_DIR/DEBIAN/prerm"
 
