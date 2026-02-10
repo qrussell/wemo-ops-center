@@ -1,0 +1,28 @@
+# Build artifacts
+dist/
+*.deb
+*.rpm
+*.dmg
+*.exe
+
+# Build scripts
+build_*.sh
+build_windows.bat
+
+# Desktop client (not used in Docker)
+wemo_ops_universal.py
+images/
+
+# Docker compose (not needed in build context)
+docker-compose.yml
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Git
+.git/
+
+# Docs
+*.md

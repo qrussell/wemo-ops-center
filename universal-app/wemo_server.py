@@ -14,8 +14,9 @@ from waitress import serve
 
 # --- CONFIGURATION ---
 VERSION = "v5.2.3"
-PORT = 5050
+PORT = int(os.environ.get("PORT", 5050)) # Custom port option, mainly for Docker at this time.
 HOST = "0.0.0.0"
+SCAN_INTERVAL = int(os.environ.get("SCAN_INTERVAL", 300)) # Time in seconds between automatic scans (default 5 minutes). Mainly for Docker at this time.
 
 # --- PATH SETUP ---
 if sys.platform == "win32":
@@ -44,6 +45,8 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger("WemoServer")
+logging.getLogger("pywemo").setLevel(logging.CRITICAL)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 app = Flask(__name__)
 
@@ -217,7 +220,7 @@ def scanner_loop():
         except Exception:
             scan_status = "Error"
         
-        time.sleep(300) 
+        time.sleep(SCAN_INTERVAL) 
 
 def poller_loop():
     """Polls devices for status updates."""

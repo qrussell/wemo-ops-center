@@ -1,0 +1,18 @@
+services:
+  wemo-server:
+    build: .
+    container_name: wemo-ops-server
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      - PORT=5050
+      - SCAN_INTERVAL=300
+    volumes:
+      - wemo-data:/data
+
+volumes:
+  wemo-data:
+    name: wemo-data
