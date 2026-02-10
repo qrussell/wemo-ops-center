@@ -15,6 +15,7 @@ images/
 
 # Docker compose (not needed in build context)
 docker-compose.yml
+docker-compose-build.yml
 
 # Python
 __pycache__/

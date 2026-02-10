@@ -17,6 +17,11 @@ RUN pip install --no-cache-dir flask requests pywemo waitress
 # Stage 2: Runtime
 FROM python:3.11-slim
 
+LABEL org.opencontainers.image.title="Wemo Ops Server" \
+      org.opencontainers.image.version="5.2.3" \
+      org.opencontainers.image.description="Wemo device automation server" \
+      org.opencontainers.image.source="https://github.com/qrussell/wemo-ops-center"
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libxml2 \
     libxslt1.1 \
