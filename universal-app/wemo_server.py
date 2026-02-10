@@ -17,6 +17,7 @@ VERSION = "v5.2.3"
 PORT = int(os.environ.get("PORT", 5050)) # Custom port option, mainly for Docker at this time.
 HOST = "0.0.0.0"
 SCAN_INTERVAL = int(os.environ.get("SCAN_INTERVAL", 300)) # Time in seconds between automatic scans (default 5 minutes). Mainly for Docker at this time.
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
 # --- PATH SETUP ---
 if sys.platform == "win32":
@@ -37,7 +38,7 @@ DEVICES_FILE = os.path.join(APP_DATA_DIR, "devices.json")
 
 # --- LOGGING ---
 logging.basicConfig(
-    level=logging.INFO, 
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler(os.path.join(APP_DATA_DIR, "server.log")),
@@ -61,6 +62,7 @@ app = Flask(__name__)
 # --- GLOBAL STATE ---
 device_registry = {}
 scan_status = "Idle"
+scan_event = threading.Event()
 settings = {}
 solar_times = {}
 
@@ -208,6 +210,7 @@ def scanner_loop():
     
     while True:
         try:
+            logger.info("Scan started")
             scan_status = "Scanning..."
             devices = pywemo.discover_devices()
             for dev in devices: register_device(dev)
@@ -224,11 +227,13 @@ def scanner_loop():
 
             save_device_cache()
             scan_status = "Idle"
-            
+            logger.info(f"Scan complete — {len(device_registry)} devices, next in {SCAN_INTERVAL}s")
+
         except Exception:
             scan_status = "Error"
-        
-        time.sleep(SCAN_INTERVAL) 
+
+        scan_event.wait(timeout=SCAN_INTERVAL)
+        scan_event.clear()
 
 def poller_loop():
     """Polls devices for status updates."""
@@ -313,7 +318,8 @@ def api_status():
         "status": "online",
         "scan_status": scan_status, 
         "device_count": len(device_registry),
-        "version": VERSION
+        "version": VERSION,
+        "threads": threading.active_count() # Simple thread count for basic monitoring.
     })
 
 @app.route('/api/devices')
@@ -354,9 +360,8 @@ def api_settings():
 
 @app.route('/api/scan', methods=['POST'])
 def api_scan():
-    global scan_status
     if "Scanning" in scan_status: return jsonify({"status": "busy"})
-    threading.Thread(target=scanner_loop, daemon=True).start()
+    scan_event.set()
     return jsonify({"status": "started"})
 
 @app.route('/api/schedules', methods=['GET', 'POST', 'DELETE'])

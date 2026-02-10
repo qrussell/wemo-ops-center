@@ -10,6 +10,7 @@ services:
       - TZ=America/New_York
       - PORT=5050
       - SCAN_INTERVAL=300
+      - LOG_LEVEL=INFO
     volumes:
       - wemo-data:/data
 
