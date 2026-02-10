@@ -71,6 +71,8 @@ pyinstaller --noconfirm --windowed --clean \
 echo "   > Building Service Binary..."
 pyinstaller --noconfirm --noconsole --onefile --clean \
     --name "wemo_service" \
+    --add-data "templates:templates" \
+    --add-data "static:static" \
     --hidden-import pywemo \
     --hidden-import flask \
     --hidden-import waitress \

@@ -75,6 +75,8 @@ pyinstaller --noconfirm --onefile --windowed \
 echo "   > Compiling Server ($SERVER_SCRIPT)..."
 pyinstaller --noconfirm --onefile --noconsole \
     --name "wemo-ops-server" \
+    --add-data "templates:templates" \
+    --add-data "static:static" \
     --hidden-import pywemo \
     --hidden-import flask \
     --hidden-import waitress \

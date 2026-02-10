@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Wemo Ops</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="app-bar">
+        <div class="brand">WEMO OPS</div>
+        <div style="display:flex; gap:10px; align-items:center;">
+            <span id="scan-status" class="status-badge">Idle</span>
+            <span style="cursor:pointer; font-size:1.2rem;" onclick="toggleTheme()">🌗</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <div id="view-dash" class="view active">
+            <div style="display:flex; justify-content:space-between; margin-bottom:15px; align-items:center;">
+                <h2 style="margin:0;">Dashboard</h2>
+                <button class="btn" style="background:var(--card); border:1px solid var(--border); color:var(--text);" onclick="triggerScan()">📡 Scan</button>
+            </div>
+            <div id="device-list" class="device-grid">
+                <div style="text-align:center; padding:40px; opacity:0.6; grid-column:1/-1;">Connecting...</div>
+            </div>
+        </div>
+        
+        <div id="view-auto" class="view">
+            <h2>Automation</h2>
+            <div class="card">
+                <h3>New Rule</h3>
+                <select id="s-dev"></select>
+                <div style="display:flex; gap:10px;">
+                    <select id="s-action"><option>Turn ON</option><option>Turn OFF</option><option>Toggle</option></select>
+                    <select id="s-type"><option>Time (Fixed)</option><option>Sunrise</option><option>Sunset</option></select>
+                </div>
+                <input type="text" id="s-val" placeholder="HH:MM (e.g. 18:30) or Offset (e.g. -30)">
+                <button class="btn btn-primary" onclick="addSchedule()">+ Add Schedule</button>
+            </div>
+            <h3 style="margin-top:20px;">Active Schedules</h3>
+            <div id="sched-list" class="device-grid"></div>
+        </div>
+
+        <div id="view-set" class="view">
+            <h2>Settings</h2>
+            <div class="card">
+                <h3>Network Configuration</h3>
+                <label style="font-size:0.9rem; color:var(--subtext); display:block; margin-bottom:5px;">Managed Subnets</label>
+                
+                <div style="display:flex; gap:10px; margin-bottom:10px;">
+                    <select id="subnet-select" onchange="selectSubnet()" style="flex:1; margin-bottom:0;"></select>
+                    <button class="btn btn-danger" style="width:auto; padding:10px 15px;" onclick="deleteSubnet()">🗑️</button>
+                </div>
+                
+                <div style="display:flex; gap:10px;">
+                    <input type="text" id="subnet-input" placeholder="192.168.1.0/24" style="flex:1; margin:0;">
+                    <button class="btn btn-primary" style="width:auto; margin:0;" onclick="saveSubnet()">💾 Save</button>
+                </div>
+            </div>
+            
+            <div style="text-align:center; margin-top:30px; color:var(--subtext);">
+                {{ version }}<br>Server Online
+            </div>
+        </div>
+    </div>
+
+    <div class="bottom-nav">
+        <div class="nav-item active" onclick="nav('dash')"><span>🏠</span>Home</div>
+        <div class="nav-item" onclick="nav('auto')"><span>⏰</span>Rules</div>
+        <div class="nav-item" onclick="nav('set')"><span>⚙️</span>Setup</div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
