@@ -13,7 +13,7 @@ from flask import Flask, render_template_string, jsonify, request
 from waitress import serve
 
 # --- CONFIGURATION ---
-VERSION = "v5.2.3"
+VERSION = "v5.2.3-1"
 PORT = int(os.environ.get("PORT", 5050)) # Custom port option, mainly for Docker at this time.
 HOST = "0.0.0.0"
 SCAN_INTERVAL = int(os.environ.get("SCAN_INTERVAL", 300)) # Time in seconds between automatic scans (default 5 minutes). Mainly for Docker at this time.

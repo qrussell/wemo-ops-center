@@ -11,7 +11,7 @@ set -e
 APP_NAME="WemoOps"
 SAFE_NAME="wemo-ops"
 VERSION="5.2.3"
-RELEASE="1"
+RELEASE="2"
 ARCH="x86_64"
 SUMMARY="Wemo Ops Center - Automation Server and Client"
 CLIENT_SCRIPT="wemo_ops_universal.py"
