@@ -45,8 +45,16 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger("WemoServer")
-logging.getLogger("pywemo").setLevel(logging.CRITICAL)
-logging.getLogger("urllib3").setLevel(logging.WARNING)
+
+class ScanNoiseFilter(logging.Filter):
+    """Filter out expected connection errors during subnet device scanning."""
+    NOISE = ("Failed to fetch description", "Failed to parse description")
+    def filter(self, record):
+        msg = record.getMessage()
+        return not any(n in msg for n in self.NOISE)
+
+for handler in logging.root.handlers:
+    handler.addFilter(ScanNoiseFilter())
 
 app = Flask(__name__)
 
