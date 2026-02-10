@@ -29,6 +29,8 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 COPY wemo_server.py .
+COPY templates templates
+COPY static static
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

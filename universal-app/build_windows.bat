@@ -77,6 +77,8 @@ echo    - Compiling Server (%SERVICE_SCRIPT%)...
 pyinstaller --noconfirm --noconsole --onefile ^
     --name "%SERVICE_EXE_NAME%" ^
     %ICON_FLAG% ^
+    --add-data "templates;templates" ^
+    --add-data "static;static" ^
     --hidden-import pywemo ^
     --hidden-import flask ^
     --hidden-import waitress ^
