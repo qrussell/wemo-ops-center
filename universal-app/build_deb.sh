@@ -11,7 +11,7 @@ set -e
 # --- CONFIGURATION ---
 APP_NAME="WemoOps"
 SAFE_NAME="wemo-ops"
-VERSION="5.2.3"
+VERSION="5.2.3-2"
 ARCH="amd64"     # Change to 'arm64' if building on Raspberry Pi
 MAINTAINER="Quentin Russell <quentin@quentinrussell.com>"
 DESC="Wemo Ops Center - Automation Server and Client"
