@@ -13,10 +13,10 @@ from flask import Flask, render_template, jsonify, request
 from waitress import serve
 
 # --- CONFIGURATION ---
-VERSION = "v5.2.3-1"
-PORT = int(os.environ.get("PORT", 5050)) # Custom port option, mainly for Docker at this time.
+VERSION = "v5.2.3-2"
+PORT = int(os.environ.get("PORT", 5050)) 
 HOST = "0.0.0.0"
-SCAN_INTERVAL = int(os.environ.get("SCAN_INTERVAL", 300)) # Time in seconds between automatic scans (default 5 minutes). Mainly for Docker at this time.
+SCAN_INTERVAL = int(os.environ.get("SCAN_INTERVAL", 300))
 
 # --- PATH SETUP ---
 if sys.platform == "win32":
@@ -201,12 +201,12 @@ def register_device(dev):
         logger.error(f"Error registering device {dev}: {e}")
 
 def run_scan_cycle():
-    """Performs a SINGLE pass of discovery. Safe for manual or background use."""
+    """Performs a SINGLE pass of discovery."""
     global scan_status, device_registry
     
-    # Simple concurrency lock using the status string
-    if scan_status != "Idle":
-        return
+													 
+    if scan_status != "Idle": return
+			  
 
     try:
         scan_status = "Scanning..."
@@ -238,13 +238,13 @@ def run_scan_cycle():
         scan_status = "Error"
 
 def scanner_loop():
-    """Background thread that runs forever."""
+											  
     while True:
         run_scan_cycle()
         time.sleep(SCAN_INTERVAL) 
 
 def poller_loop():
-    """Polls devices for status updates."""
+										   
     while True:
         keys = list(device_registry.keys())
         for name in keys:
@@ -252,7 +252,7 @@ def poller_loop():
             dev = entry.get("obj")
             if dev:
                 try:
-                    # [FIX] Force update to see external changes (Desktop App / Physical)
+																						 
                     state = dev.get_state(force_update=True)
                     entry['state'] = state
                     entry['last_seen'] = time.time()
@@ -276,7 +276,7 @@ def scheduler_loop():
         try:
             now = datetime.datetime.now()
             today_str = now.strftime("%Y-%m-%d")
-            weekday = now.weekday()
+            weekday = now.weekday()  # Monday=0, Sunday=6
             current_hhmm = now.strftime("%H:%M")
             solar = get_solar_times()
             
@@ -284,7 +284,13 @@ def scheduler_loop():
             schedule_modified = False
 
             for job in current_schedules:
-                if weekday not in job.get('days', []): continue
+                # [CHANGE] Ensure we check against the days list
+                job_days = job.get('days', [])
+                if not job_days: continue # Skip invalid jobs
+                
+                # Check if today is in the enabled days
+                if weekday not in job_days: continue
+
                 trigger_time = ""
                 if job['type'] == "Time (Fixed)":
                     trigger_time = job['value']
@@ -292,21 +298,33 @@ def scheduler_loop():
                     base = solar['sunrise'] if job['type'] == "Sunrise" else solar['sunset']
                     try:
                         dt = datetime.datetime.strptime(f"{today_str} {base}", "%Y-%m-%d %H:%M")
-                        offset = int(job['value']) * int(job.get('offset_dir', 1))
-                        trigger_time = (dt + datetime.timedelta(minutes=offset)).strftime("%H:%M")
+                        # Handle offset direction properly
+                        offset_val = int(job['value'])
+                        offset_dir = int(job.get('offset_dir', 1)) # Default to ADD if missing
+                        
+                        # Apply offset logic
+                        final_minutes = offset_val * offset_dir
+                        
+                        trigger_time = (dt + datetime.timedelta(minutes=final_minutes)).strftime("%H:%M")
                     except: continue
                 
+                # Check if it's time to run
+                # Using a 'last_run' flag with date ensures it only runs once per day
                 if trigger_time == current_hhmm and job.get('last_run') != today_str:
                     entry = device_registry.get(job['device'])
                     if entry and entry.get("obj"):
                         dev = entry["obj"]
                         try:
-                            if job['action'] == "Turn ON": dev.on()
-                            elif job['action'] == "Turn OFF": dev.off()
-                            elif job['action'] == "Toggle": dev.toggle()
-                            # Immediate state update after action
+                            action = job['action']
+                            if action == "Turn ON": dev.on()
+                            elif action == "Turn OFF": dev.off()
+                            elif action == "Toggle": dev.toggle()
+                            
                             entry['state'] = dev.get_state(force_update=True)
-                        except: pass
+                            logger.info(f"Executed Schedule: {job['device']} -> {action}")
+                        except Exception as e:
+                            logger.error(f"Failed to execute schedule for {job['device']}: {e}")
+                    
                     job['last_run'] = today_str
                     schedule_modified = True
             
@@ -371,33 +389,46 @@ def api_scan():
     global scan_status
     if scan_status != "Idle": 
         return jsonify({"status": "busy"})
-    
-    # FIX: Target the single-run function, NOT the loop
+	
+													   
     threading.Thread(target=run_scan_cycle, daemon=True).start()
     return jsonify({"status": "started"})
 
 @app.route('/api/schedules', methods=['GET', 'POST', 'DELETE'])
 def api_schedules():
     current = load_json(SCHEDULE_FILE, [])
-    if request.method == 'GET': return jsonify(current)
+    
+    if request.method == 'GET': 
+        return jsonify(current)
+    
     if request.method == 'POST':
         data = request.json
-        data['id'] = int(time.time())
-        data['last_run'] = ""
-        current.append(data)
+        # [CHANGE] Add explicit handling for 'days'
+        new_job = {
+            "id": int(time.time()),
+            "device": data.get('device'),
+            "type": data.get('type'),      # "Time (Fixed)" or "Sunrise"/"Sunset"
+            "action": data.get('action'),  # "Turn ON", "Turn OFF", "Toggle"
+            "value": data.get('value'),    # "HH:MM" or Offset Minutes
+            "offset_dir": data.get('offset_dir', 1), # 1 or -1
+            "days": data.get('days', [0,1,2,3,4,5,6]), # Default to all days if missing
+            "last_run": ""
+        }
+        current.append(new_job)
         save_json(SCHEDULE_FILE, current)
-        return jsonify({"status": "added", "id": data['id']})
+        return jsonify({"status": "added", "id": new_job['id']})
+    
     if request.method == 'DELETE':
         jid = int(request.args.get('id'))
-        new_list = [x for x in current if x['id'] != jid]
-        save_json(SCHEDULE_FILE, new_list)
+        current = [x for x in current if x['id'] != jid]
+        save_json(SCHEDULE_FILE, current)
         return jsonify({"status": "deleted"})
 
 
 if __name__ == "__main__":
     settings = load_json(SETTINGS_FILE, {})
     
-    # Start background threads
+							  
     threading.Thread(target=scanner_loop, daemon=True).start()
     threading.Thread(target=poller_loop, daemon=True).start()
     threading.Thread(target=scheduler_loop, daemon=True).start()
@@ -406,5 +437,5 @@ if __name__ == "__main__":
     print(f"   WEMO OPS SERVER - LISTENING ON PORT {PORT}")
     print("----------------------------------------------------------------")
     
-    # Production-ready server
+							 
     serve(app, host=HOST, port=PORT, threads=6)

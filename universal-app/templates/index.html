@@ -30,14 +30,51 @@
             <h2>Automation</h2>
             <div class="card">
                 <h3>New Rule</h3>
-                <select id="s-dev"></select>
-                <div style="display:flex; gap:10px;">
-                    <select id="s-action"><option>Turn ON</option><option>Turn OFF</option><option>Toggle</option></select>
-                    <select id="s-type"><option>Time (Fixed)</option><option>Sunrise</option><option>Sunset</option></select>
+                
+                <select id="s-dev" style="width: 100%; margin-bottom: 10px; padding: 10px;"></select>
+                
+                <div style="display:flex; gap:10px; margin-bottom: 10px;">
+                    <select id="s-action" style="flex:1;"><option>Turn ON</option><option>Turn OFF</option><option>Toggle</option></select>
+                    <select id="s-type" style="flex:1;"><option>Time (Fixed)</option><option>Sunrise</option><option>Sunset</option></select>
                 </div>
-                <input type="text" id="s-val" placeholder="HH:MM (e.g. 18:30) or Offset (e.g. -30)">
+                
+                <input type="text" id="s-val" placeholder="HH:MM (e.g. 18:30) or Offset (e.g. -30)" style="width: 100%; margin-bottom: 15px;">
+                
+                <label style="font-size:0.85rem; color:var(--subtext); display:block; margin-bottom:5px;">Active Days</label>
+                <div id="s-days" style="display:flex; justify-content:space-between; margin-bottom:15px; background: rgba(0,0,0,0.05); padding: 10px; border-radius: 8px;">
+                    <label style="display:flex; flex-direction:column; align-items:center; cursor:pointer;">
+                        <span style="font-size:0.8rem; font-weight:bold;">M</span>
+                        <input type="checkbox" value="0" checked>
+                    </label>
+                    <label style="display:flex; flex-direction:column; align-items:center; cursor:pointer;">
+                        <span style="font-size:0.8rem; font-weight:bold;">T</span>
+                        <input type="checkbox" value="1" checked>
+                    </label>
+                    <label style="display:flex; flex-direction:column; align-items:center; cursor:pointer;">
+                        <span style="font-size:0.8rem; font-weight:bold;">W</span>
+                        <input type="checkbox" value="2" checked>
+                    </label>
+                    <label style="display:flex; flex-direction:column; align-items:center; cursor:pointer;">
+                        <span style="font-size:0.8rem; font-weight:bold;">T</span>
+                        <input type="checkbox" value="3" checked>
+                    </label>
+                    <label style="display:flex; flex-direction:column; align-items:center; cursor:pointer;">
+                        <span style="font-size:0.8rem; font-weight:bold;">F</span>
+                        <input type="checkbox" value="4" checked>
+                    </label>
+                    <label style="display:flex; flex-direction:column; align-items:center; cursor:pointer;">
+                        <span style="font-size:0.8rem; font-weight:bold;">S</span>
+                        <input type="checkbox" value="5" checked>
+                    </label>
+                    <label style="display:flex; flex-direction:column; align-items:center; cursor:pointer;">
+                        <span style="font-size:0.8rem; font-weight:bold;">S</span>
+                        <input type="checkbox" value="6" checked>
+                    </label>
+                </div>
+
                 <button class="btn btn-primary" onclick="addSchedule()">+ Add Schedule</button>
             </div>
+
             <h3 style="margin-top:20px;">Active Schedules</h3>
             <div id="sched-list" class="device-grid"></div>
         </div>
