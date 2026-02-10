@@ -200,34 +200,47 @@ def register_device(dev):
     except Exception as e:
         logger.error(f"Error registering device {dev}: {e}")
 
-def scanner_loop():
-    global scan_status
-    import pywemo
-    ds = DeepScanner()
-    load_device_cache()
+def run_scan_cycle():
+    """Performs a SINGLE pass of discovery. Safe for manual or background use."""
+    global scan_status, device_registry
     
-    while True:
-        try:
-            scan_status = "Scanning..."
-            devices = pywemo.discover_devices()
-            for dev in devices: register_device(dev)
-            
-            subs = settings.get("subnets", [])
-            if subs:
-                scan_status = f"Deep Scanning..."
-                deep_devs = ds.scan_subnet(subs)
-                for dev in deep_devs: register_device(dev)
-            
-            now = time.time()
-            to_remove = [n for n, d in device_registry.items() if (now - d.get("last_seen", 0)) > 900]
-            for name in to_remove: del device_registry[name]
+    # Simple concurrency lock using the status string
+    if scan_status != "Idle":
+        return
 
-            save_device_cache()
-            scan_status = "Idle"
-            
-        except Exception:
-            scan_status = "Error"
+    try:
+        scan_status = "Scanning..."
+        import pywemo
+        ds = DeepScanner()
+        load_device_cache()
         
+        # 1. Standard Discovery
+        devices = pywemo.discover_devices()
+        for dev in devices: register_device(dev)
+        
+        # 2. Deep Scan
+        subs = settings.get("subnets", [])
+        if subs:
+            scan_status = "Deep Scanning..."
+            deep_devs = ds.scan_subnet(subs)
+            for dev in deep_devs: register_device(dev)
+        
+        # 3. Pruning
+        now = time.time()
+        to_remove = [n for n, d in device_registry.items() if (now - d.get("last_seen", 0)) > 900]
+        for name in to_remove: del device_registry[name]
+
+        save_device_cache()
+        scan_status = "Idle"
+        
+    except Exception as e:
+        logger.error(f"Scan Error: {e}")
+        scan_status = "Error"
+
+def scanner_loop():
+    """Background thread that runs forever."""
+    while True:
+        run_scan_cycle()
         time.sleep(SCAN_INTERVAL) 
 
 def poller_loop():
@@ -355,8 +368,11 @@ def api_settings():
 @app.route('/api/scan', methods=['POST'])
 def api_scan():
     global scan_status
-    if "Scanning" in scan_status: return jsonify({"status": "busy"})
-    threading.Thread(target=scanner_loop, daemon=True).start()
+    if scan_status != "Idle": 
+        return jsonify({"status": "busy"})
+    
+    # FIX: Target the single-run function, NOT the loop
+    threading.Thread(target=run_scan_cycle, daemon=True).start()
     return jsonify({"status": "started"})
 
 @app.route('/api/schedules', methods=['GET', 'POST', 'DELETE'])
