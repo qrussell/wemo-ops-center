@@ -1,11 +1,32 @@
 # WeMo MCP Server
 
-A Model Context Protocol (MCP) server for WeMo smart home device discovery and control.
+Control WeMo smart home devices through AI assistants using natural language.
 
+[![Install with Claude Desktop](https://img.shields.io/badge/Claude_Desktop-Install_Server-5436DA?style=for-the-badge&logo=anthropic&logoColor=white)](#claude-desktop-integration)
+[![Install with Claude Code](https://img.shields.io/badge/Claude_Code-Install_Server-8B5CF6?style=for-the-badge&logo=anthropic&logoColor=white)](#claude-code-cli)
+[![Install with VS Code](https://img.shields.io/badge/VS_Code-Install_Server-007ACC?style=for-the-badge&logo=visualstudiocode&logoColor=white)](#vs-code-integration)
+[![Add to Cursor](https://img.shields.io/badge/Add_to-Cursor-000000?style=for-the-badge&logo=cursor&logoColor=white)](cursor://anysphere.cursor-deeplink/mcp/install?name=WeMo%20MCP%20Server&config=eyJjb21tYW5kIjoidXZ4IiwiYXJncyI6WyJ3ZW1vLW1jcC1zZXJ2ZXIiXX0%3D)
+
+[![PyPI version](https://img.shields.io/pypi/v/wemo-mcp-server.svg)](https://pypi.org/project/wemo-mcp-server/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![MCP](https://img.shields.io/badge/MCP-Server-blue)](https://modelcontextprotocol.io)
-[![AI Integration](https://img.shields.io/badge/AI-Integration-purple)](https://modelcontextprotocol.io)
+
+## Quick Start
+
+Install this package:
+
+```bash
+pip install wemo-mcp-server
+```
+
+or use [uvx](https://docs.astral.sh/uv/) for isolated execution:
+
+```bash
+uvx wemo-mcp-server
+```
+
+Then click one of the badges above to add to your MCP client, or see [Configuration](#configuration) for manual setup.
 
 ## Overview
 
@@ -27,81 +48,60 @@ This MCP server provides seamless integration with WeMo smart home devices, enab
 - **💾 Device Caching**: Automatic caching of discovered devices for quick access
 - **🔌 MCP Integration**: Works with any MCP-compatible application (Claude Desktop, VS Code, etc.)
 
-## Installation
+## Configuration
 
-### Prerequisites
+### Claude Desktop
 
-- Python 3.10 or higher
-- pip or uv package manager
-
-### Install from Source
-
-```bash
-git clone https://github.com/qrussell/wemo-ops-center.git
-cd wemo-ops-center/mcp
-pip install -e .
-```
-
-### Development Installation
-
-```bash
-git clone https://github.com/qrussell/wemo-ops-center.git
-cd wemo-ops-center/mcp
-uv venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-uv sync --dev
-```
-
-## Usage
-
-### Claude Desktop Integration
-
-Add to Claude Desktop configuration (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "wemo-mcp-server": {
-      "command": "python",
-      "args": ["-m", "wemo_mcp_server"],
-      "env": {
-        "PYTHONPATH": "/path/to/mcp/src"
-      }
+      "command": "uvx",
+      "args": ["wemo-mcp-server"]
     }
   }
 }
 ```
 
-### VS Code Integration
+### Claude Code CLI
 
-Add to your VS Code MCP configuration (`~/.vscode/mcp.json`):
+```bash
+claude mcp add wemo-mcp-server --command uvx --args wemo-mcp-server
+```
+
+### VS Code
+
+Edit `~/.vscode/mcp.json`:
 
 ```json
 {
   "servers": {
     "wemo-mcp-server": {
       "type": "stdio",
-      "command": "python",
-      "args": ["-m", "wemo_mcp_server"],
-      "env": {
-        "PYTHONPATH": "/path/to/mcp/src"
-      }
+      "command": "uvx",
+      "args": ["wemo-mcp-server"]
     }
   }
 }
 ```
 
-**Note:** MCP host applications automatically start and manage the server process when configured. No manual server execution is needed for normal usage.
+### Cursor
 
-### Manual Server Execution (Optional)
+Click the "Add to Cursor" badge above, or edit `~/.cursor/mcp.json`:
 
-For testing or debugging, you can run the server directly:
-
-```bash
-python -m wemo_mcp_server
+```json
+{
+  "servers": {
+    "wemo-mcp-server": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["wemo-mcp-server"]
+    }
+  }
+}
 ```
-
-The server uses stdio transport for MCP communication.
 
 ## Available Tools
 
@@ -274,47 +274,37 @@ Comparison of features between this MCP server and the main [wemo-ops-center](ht
 
 ## Development
 
-### Project Structure
+### Setup
 
-```
-mcp/
-├── src/
-│   └── wemo_mcp_server/
-│       ├── __init__.py          # Package initialization
-│       ├── __main__.py          # Module entry point
-│       └── server.py            # Main MCP server implementation
-├── tests/
-│   ├── test_server.py           # Unit tests
-│   └── test_e2e.py              # End-to-end test suite
-├── pyproject.toml               # Project configuration
-├── README.md                    # This file
-└── LICENSE                      # MIT License
+```bash
+git clone https://github.com/qrussell/wemo-ops-center.git
+cd wemo-ops-center/mcp
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+uv sync --dev
 ```
 
 ### Running Tests
 
-#### E2E Test Suite (Recommended)
-
 ```bash
-# Run comprehensive E2E tests (requires actual WeMo devices on network)
-python -m pytest tests/test_e2e.py -v
-
-# Or run directly
+# E2E tests (requires WeMo devices on network)
 python tests/test_e2e.py
+
+# Unit tests
+pytest tests/test_server.py -v
 ```
 
-The E2E test suite validates all 6 MCP tools:
-- ✅ Network scanning and device discovery
-- ✅ Device caching and listing
-- ✅ Status retrieval (by name and IP)
-- ✅ Device control (optional, set `TEST_CONTROL = True`)
-- ✅ Device rename
-- ✅ HomeKit code extraction
+### Using Development Version
 
-#### Unit Tests
-
-```bash
-pytest tests/test_server.py -v
+In your MCP client config, use:
+```json
+{
+  "command": "python",
+  "args": ["-m", "wemo_mcp_server"],
+  "env": {
+    "PYTHONPATH": "/path/to/mcp/src"
+  }
+}
 ```
 
 ## Contributing
