@@ -1,0 +1,86 @@
+name: Publish MCP Server to PyPI
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:  # Allow manual trigger for testing
+
+jobs:
+  publish:
+    # Only run for releases tagged with mcp-*
+    if: startsWith(github.ref, 'refs/tags/mcp-v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # Required for trusted publishing
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          # Extract version from tag (e.g., mcp-v0.1.0 -> 0.1.0)
+          VERSION=${GITHUB_REF#refs/tags/mcp-v}
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing version: $VERSION"
+
+      - name: Verify version matches pyproject.toml
+        run: |
+          cd mcp
+          PYPROJECT_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          TAG_VERSION="${{ steps.version.outputs.version }}"
+          if [ "$PYPROJECT_VERSION" != "$TAG_VERSION" ]; then
+            echo "❌ Version mismatch!"
+            echo "   pyproject.toml: $PYPROJECT_VERSION"
+            echo "   Git tag: $TAG_VERSION"
+            exit 1
+          fi
+          echo "✅ Version verified: $PYPROJECT_VERSION"
+
+      - name: Build package
+        run: |
+          cd mcp
+          python -m build
+          echo "📦 Built package:"
+          ls -lh dist/
+
+      - name: Check package
+        run: |
+          cd mcp
+          twine check dist/*
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: mcp/dist/
+          print-hash: true
+          # Using trusted publishing (OIDC) - configure at https://pypi.org/manage/account/publishing/
+          # Alternative: use password: ${{ secrets.PYPI_API_TOKEN }} if using API token
+
+      - name: Create release summary
+        run: |
+          cd mcp
+          echo "## 🎉 Published to PyPI" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Install command:**" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "pip install wemo-mcp-server==${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "# or" >> $GITHUB_STEP_SUMMARY
+          echo "uvx wemo-mcp-server@${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**PyPI page:** https://pypi.org/project/wemo-mcp-server/${{ steps.version.outputs.version }}/" >> $GITHUB_STEP_SUMMARY

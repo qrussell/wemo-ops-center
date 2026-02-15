@@ -2,7 +2,9 @@
 
 A Model Context Protocol (MCP) server for WeMo smart home device discovery and control.
 
+[![PyPI version](https://img.shields.io/pypi/v/wemo-mcp-server.svg)](https://pypi.org/project/wemo-mcp-server/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![PyPI downloads](https://img.shields.io/pypi/dm/wemo-mcp-server.svg)](https://pypi.org/project/wemo-mcp-server/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![MCP](https://img.shields.io/badge/MCP-Server-blue)](https://modelcontextprotocol.io)
 [![AI Integration](https://img.shields.io/badge/AI-Integration-purple)](https://modelcontextprotocol.io)
@@ -34,7 +36,21 @@ This MCP server provides seamless integration with WeMo smart home devices, enab
 - Python 3.10 or higher
 - pip or uv package manager
 
+### Install via pip (Recommended)
+
+```bash
+pip install wemo-mcp-server
+```
+
+Or using uvx (runs isolated, no global install):
+
+```bash
+uvx wemo-mcp-server
+```
+
 ### Install from Source
+
+For development or testing unreleased features:
 
 ```bash
 git clone https://github.com/qrussell/wemo-ops-center.git
@@ -58,6 +74,21 @@ uv sync --dev
 
 Add to Claude Desktop configuration (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
 
+**After installing via pip/uvx:**
+
+```json
+{
+  "mcpServers": {
+    "wemo-mcp-server": {
+      "command": "uvx",
+      "args": ["wemo-mcp-server"]
+    }
+  }
+}
+```
+
+**For development/source installation:**
+
 ```json
 {
   "mcpServers": {
@@ -75,6 +106,22 @@ Add to Claude Desktop configuration (`~/Library/Application Support/Claude/claud
 ### VS Code Integration
 
 Add to your VS Code MCP configuration (`~/.vscode/mcp.json`):
+
+**After installing via pip/uvx:**
+
+```json
+{
+  "servers": {
+    "wemo-mcp-server": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["wemo-mcp-server"]
+    }
+  }
+}
+```
+
+**For development/source installation:**
 
 ```json
 {
