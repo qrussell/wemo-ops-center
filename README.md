@@ -1,10 +1,12 @@
 # Wemo Ops Center
-Welcome to Wemo Ops. We offer two ways to manage your smart home, depending on your needs. You can run the Desktop App for instant control on your workstation, or deploy the Server for always-on automation.
+Welcome to Wemo Ops. We offer three ways to manage your smart home, depending on your needs. You can run the Desktop App for instant control on your workstation, deploy the Server for always-on automation, or use the MCP Server for AI assistant integration.
 
 ![Wemo Ops Center Dashboard](assets/wemo-ops.png)
 
 ![Version](https://img.shields.io/badge/version-v5.2.3-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
+[![MCP](https://img.shields.io/badge/MCP-Server-blue)](https://modelcontextprotocol.io)
+[![AI Integration](https://img.shields.io/badge/AI-Integration-purple)](https://modelcontextprotocol.io)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ---
 **Resurrect your hardware.** The Wemo Cloud is dead, but your devices don't have to be.
@@ -17,13 +19,13 @@ Wemo Ops Center is a completely local, offline provisioning and automation suite
 
 ## 🚀 Choose Your Edition
 
-| Feature | 🖥️ Desktop App (GUI) | ⚙️ Server App (Headless) |
-| :--- | :--- | :--- |
-| **Best For** | Casual users, quick toggling, setup | Power users, Home Labs, 24/7 automation |
-| **Interface** | Native Window (Python/Tkinter) | Web Dashboard (Browser-based) |
-| **Running State** | Runs only when open | Runs 24/7 as a background service |
-| **OS Support** | Linux (Fedora/Ubuntu), Windows | Linux Server, Raspberry Pi, Docker |
-| **Key Benefit** | **Zero Setup.** Just launch and click. | **Set & Forget.** Automation never stops. |
+| Feature | 🖥️ Desktop App (GUI) | ⚙️ Server App (Headless) | 🤖 MCP Server (AI) |
+| :--- | :--- | :--- | :--- |
+| **Best For** | Casual users, quick toggling, setup | Power users, Home Labs, 24/7 automation | AI assistant users, MCP developers |
+| **Interface** | Native Window (Python/Tkinter) | Web Dashboard (Browser-based) | AI Assistant (Natural language) |
+| **Running State** | Runs only when open | Runs 24/7 as a background service | Launched on-demand by AI |
+| **OS Support** | Linux (Fedora/Ubuntu), Windows | Linux Server, Raspberry Pi, Docker | Python 3.10+ (Any OS) |
+| **Key Benefit** | **Zero Setup.** Just launch and click. | **Set & Forget.** Automation never stops. | **Universal Protocol.** Works with any MCP host. |
 
 # Wemo Ops Center (Desktop)
 ## 📥 Download & Run
@@ -206,11 +208,31 @@ sudo apt install wemo-ops-server  # Ubuntu / Debian
 ## Installation instructions for Wemo Ops Server 
 ### Debian/Ubuntu or RHEL/Rocky/Fedora Instructions on the Wiki Page:
 * Visit the Wemo Ops Server wiki page [Wemo Ops Server Wiki Page](https://github.com/qrussell/wemo-ops-center/wiki/Wemo-Ops-Server)
+
+## 🤖 Option 3: MCP Server
+(For AI Assistant Integration)
+
+The **WeMo MCP Server** enables natural language control of your WeMo devices through any application that supports the Model Context Protocol (MCP). Works with AI assistants like Claude Desktop, VS Code with GitHub Copilot, and other MCP-compatible tools.
+
+![Claude Desktop controlling WeMo devices](mcp/assets/claude-example.png)
+
+### Why use this?
+
+* **Talk to Your Devices:** Just say "Turn on the office light" or "What devices are on my network?"
+
+* **No GUI Needed:** Control everything through your AI assistant conversations.
+
+* **Universal Protocol:** Works with any MCP host application, not limited to specific tools.
+
+See the **[MCP Server Documentation](mcp/README.md)** for full setup and features.
+
 ## 🤝 Better Together: The Hybrid Approach
-"Can I use both?" Yes! In fact, this is the most powerful way to use Wemo Ops.
+"Can I use multiple options?" Yes! All three work together seamlessly.
 
-* Use the Server to handle the "boring stuff"—keeping schedules running, monitoring device health, and providing a dashboard for your phone.
+* Use the **Server** to handle the "boring stuff"—keeping schedules running, monitoring device health, and providing a dashboard for your phone.
 
-* Use the Desktop App on your workstation for rapid control while you work, or for deep configuration tasks like firmware updates or bulk provisioning.
+* Use the **Desktop App** on your workstation for rapid control while you work, or for deep configuration tasks like firmware updates or bulk provisioning.
 
-* Both applications can run on the same network and control the same devices simultaneously without conflict.
+* Use the **MCP Server** with your AI assistant for quick natural language queries and control during development or daily work.
+
+* All applications can run on the same network and control the same devices simultaneously without conflict.
