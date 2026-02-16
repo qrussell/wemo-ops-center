@@ -3,7 +3,7 @@
   "name": "io.github.qrussell/wemo",
   "description": "Control WeMo smart home devices - discover, toggle, adjust brightness, and manage HomeKit codes",
   "repository": {
-    "url": "https://github.com/qrussell/wemo-ops-center",
+    "url": "https://github.com/qrussell/wemo-ops-center/tree/main/mcp#wemo-mcp-server",
     "source": "github"
   },
   "version": "1.0.1",
