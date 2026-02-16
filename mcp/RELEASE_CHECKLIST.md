@@ -33,7 +33,11 @@
 
 ## After First Stable Release (v1.0.0)
 
-- [ ] Submit to MCP registry: https://github.com/modelcontextprotocol/servers
+- [ ] Publish to MCP Registry:
+  - [ ] Install mcp-publisher: `brew install mcp-publisher` (or download from releases)
+  - [ ] Authenticate: `mcp-publisher login github`
+  - [ ] Publish: `cd mcp && mcp-publisher publish`
+  - [ ] Verify at https://registry.modelcontextprotocol.io/v0.1/servers?search=wemo
 - [ ] Share on social media / community forums
 - [ ] Monitor issues and user feedback
 - [ ] Update documentation if needed
