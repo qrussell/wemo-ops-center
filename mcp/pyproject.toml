@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wemo-mcp-server"
-version = "0.1.0"
+version = "1.0.0"
 description = "Model Context Protocol server for WeMo smart home device discovery and control"
 authors = [
     {name = "apiarya", email = "izzasnvyp7@privaterelay.appleid.com"}
@@ -14,7 +14,7 @@ requires-python = ">=3.10"
 keywords = ["mcp", "wemo", "smart-home", "belkin", "iot", "home-automation"]
 license = {text = "MIT"}
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",

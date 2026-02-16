@@ -25,6 +25,8 @@ Wemo Ops Center is a completely local, offline provisioning and automation suite
 | **Interface** | Native Window (Python/Tkinter) | Web Dashboard (Browser-based) | AI Assistant (Natural language) |
 | **Running State** | Runs only when open | Runs 24/7 as a background service | Launched on-demand by AI |
 | **OS Support** | Linux (Fedora/Ubuntu), Windows | Linux Server, Raspberry Pi, Docker | Python 3.10+ (Any OS) |
+| **Installation** | Download from Releases | `dnf/apt install` or Docker | `pip install wemo-mcp-server` |
+| **Version** | v5.2.3 | v5.2.3 | v1.0.0 (Stable) |
 | **Key Benefit** | **Zero Setup.** Just launch and click. | **Set & Forget.** Automation never stops. | **Universal Protocol.** Works with any MCP host. |
 
 # Wemo Ops Center (Desktop)
@@ -212,9 +214,12 @@ sudo apt install wemo-ops-server  # Ubuntu / Debian
 ## 🤖 Option 3: MCP Server
 (For AI Assistant Integration)
 
-The **WeMo MCP Server** enables natural language control of your WeMo devices through any application that supports the Model Context Protocol (MCP). Works with AI assistants like Claude Desktop, VS Code with GitHub Copilot, and other MCP-compatible tools.
+[![PyPI version](https://badge.fury.io/py/wemo-mcp-server.svg)](https://pypi.org/project/wemo-mcp-server/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
-![Claude Desktop controlling WeMo devices](mcp/assets/claude-example.png)
+The **WeMo MCP Server** (v1.0.0) enables natural language control of your WeMo devices through any application that supports the Model Context Protocol (MCP). Works with AI assistants like Claude Desktop, VS Code with GitHub Copilot, Cursor, and other MCP-compatible tools.
+
+![Claude Desktop controlling WeMo devices](https://raw.githubusercontent.com/qrussell/wemo-ops-center/main/mcp/assets/claude-example.png)
 
 ### Why use this?
 
@@ -224,7 +229,9 @@ The **WeMo MCP Server** enables natural language control of your WeMo devices th
 
 * **Universal Protocol:** Works with any MCP host application, not limited to specific tools.
 
-See the **[MCP Server Documentation](mcp/README.md)** for full setup and features.
+* **Production Ready:** v1.0.0 stable release with comprehensive documentation.
+
+See the **[Wemo MCP Server Documentation](mcp/README.md)** for full setup and features.
 
 ## 🤝 Better Together: The Hybrid Approach
 "Can I use multiple options?" Yes! All three work together seamlessly.
