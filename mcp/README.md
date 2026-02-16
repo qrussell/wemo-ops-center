@@ -4,11 +4,12 @@ Control WeMo smart home devices through AI assistants using natural language.
 
 **mcp-name: io.github.qrussell/wemo**
 
-[![PyPI version](https://badge.fury.io/py/wemo-mcp-server.svg)](https://pypi.org/project/wemo-mcp-server/)
-[![Publish MCP Server to PyPI](https://github.com/qrussell/wemo-ops-center/actions/workflows/pypi-publish.yml/badge.svg)](https://github.com/qrussell/wemo-ops-center/actions/workflows/pypi-publish.yml)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![MCP](https://img.shields.io/badge/MCP-Server-blue)](https://modelcontextprotocol.io)
+[![MCP Registry](https://img.shields.io/badge/MCP_Registry-Registered-green)](https://registry.modelcontextprotocol.io/?q=wemo)
+[![PyPI version](https://img.shields.io/pypi/v/wemo-mcp-server)](https://pypi.org/project/wemo-mcp-server/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Transport](https://img.shields.io/badge/Transport-stdio-lightblue)](https://modelcontextprotocol.io/docs/concepts/transports)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Table of Contents
 
