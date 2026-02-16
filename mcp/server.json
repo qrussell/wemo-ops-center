@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.qrussell/wemo",
+  "description": "Control WeMo smart home devices - discover, toggle, adjust brightness, and manage HomeKit codes",
+  "repository": {
+    "url": "https://github.com/qrussell/wemo-ops-center",
+    "source": "github"
+  },
+  "version": "1.0.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "wemo-mcp-server",
+      "version": "1.0.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

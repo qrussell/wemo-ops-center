@@ -135,60 +135,52 @@ Trusted publishing uses GitHub OIDC tokens instead of API keys - more secure and
    uvx wemo-mcp-server
    ```
 
-### Step 4: Submit to MCP Registry
+### Step 4: Publish to MCP Registry
 
-Once published and tested on PyPI:
+Once published and tested on PyPI, submit to the official MCP Registry:
 
-1. **Fork the MCP servers repository**:
-   - Go to: https://github.com/modelcontextprotocol/servers
-   - Click "Fork"
-
-2. **Add your server entry**:
+1. **Install mcp-publisher CLI**:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/servers.git
-   cd servers
+   # macOS/Linux
+   curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher && sudo mv mcp-publisher /usr/local/bin/
+   
+   # Or via Homebrew
+   brew install mcp-publisher
+   
+   # Verify installation
+   mcp-publisher --help
+   ```
+
+2. **Authenticate with GitHub**:
+   ```bash
+   mcp-publisher login github
    ```
    
-   Add entry to the appropriate file (check their contribution guide):
-   ```json
-   {
-     "name": "wemo-mcp-server",
-     "displayName": "WeMo Smart Home Control",
-     "description": "Control WeMo smart home devices through natural language. Discover devices, toggle switches, adjust brightness, and manage HomeKit codes.",
-     "repository": "https://github.com/qrussell/wemo-ops-center/tree/main/mcp",
-     "homepage": "https://github.com/qrussell/wemo-ops-center",
-     "language": "python",
-     "categories": ["smart-home", "iot", "home-automation"],
-     "install": {
-       "pip": "wemo-mcp-server",
-       "uvx": "wemo-mcp-server"
-     },
-     "configuration": {
-       "claude_desktop": {
-         "mcpServers": {
-           "wemo-mcp-server": {
-             "command": "uvx",
-             "args": ["wemo-mcp-server"]
-           }
-         }
-       }
-     },
-     "license": "MIT",
-     "version": "1.0.0"
-   }
-   ```
+   Follow the prompts to authenticate via GitHub device flow.
 
-3. **Create Pull Request**:
+3. **Publish to registry**:
    ```bash
-   git checkout -b add-wemo-mcp-server
-   git add .
-   git commit -m "Add WeMo MCP Server"
-   git push origin add-wemo-mcp-server
+   cd mcp
+   mcp-publisher publish
    ```
-   - Go to your fork on GitHub
-   - Click "Contribute" → "Open pull request"
-   - Follow their PR template
-   - Link to PyPI package: https://pypi.org/project/wemo-mcp-server/
+   
+   This uses the `server.json` file in the mcp directory.
+
+4. **Verify registration**:
+   ```bash
+   # Search for your server
+   curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=wemo"
+   ```
+   
+   Or visit: https://registry.modelcontextprotocol.io/
+
+**Note:** The `server.json` file is already configured with:
+- Name: `io.github.qrussell/wemo`
+- PyPI package: `wemo-mcp-server`
+- Repository: `https://github.com/qrussell/wemo-ops-center`
+
+The registry validates that the PyPI package exists and matches the specified version before accepting the submission.
+
 
 ## Subsequent Releases
 
@@ -239,5 +231,7 @@ git tag v1.0.0      # ❌ Won't trigger
 
 - [PyPI Trusted Publishing Guide](https://docs.pypi.org/trusted-publishers/)
 - [Python Packaging Guide](https://packaging.python.org/)
-- [MCP Servers Registry](https://github.com/modelcontextprotocol/servers)
+- [MCP Registry](https://registry.modelcontextprotocol.io/)
+- [MCP Registry Documentation](https://github.com/modelcontextprotocol/registry)
+- [MCP Registry Quickstart](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/quickstart.mdx)
 - [GitHub Actions - PyPI Publish Action](https://github.com/pypa/gh-action-pypi-publish)
