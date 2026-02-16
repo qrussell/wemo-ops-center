@@ -369,3 +369,4 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - Built with [Model Context Protocol SDK](https://github.com/modelcontextprotocol/python-sdk)
 - Uses [pywemo](https://github.com/pywemo/pywemo) for WeMo device communication
 - Part of the [wemo-ops-center](https://github.com/qrussell/wemo-ops-center) project
+mcp-name: io.github.qrussell/mcp
