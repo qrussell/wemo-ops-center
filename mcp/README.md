@@ -15,7 +15,8 @@ Control WeMo smart home devices through AI assistants using natural language.
 
 - [Overview](#overview)
 - [Prerequisites](#prerequisites)
-- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Connect](#connect)
 - [MCP Tools](#mcp-tools)
   - [scan_network](#1-scan_network)
   - [list_devices](#2-list_devices)
@@ -72,15 +73,36 @@ After installation, restart your terminal and verify:
 uvx --version
 ```
 
-## Installation
+## Quick Start
 
-Choose your MCP client and click the badge for one-click setup, or configure manually:
+Get started in seconds with Claude Code CLI:
 
-### Claude Desktop
+```bash
+claude mcp add wemo -- uvx wemo-mcp-server
+```
 
-[![Claude Desktop](https://img.shields.io/badge/Claude_Desktop-Setup_Guide-5436DA?style=for-the-badge&logo=anthropic&logoColor=white)](https://modelcontextprotocol.io/quickstart/user)
+---
 
-**Manual Configuration:**
+## Connect
+
+### One-Click Installation
+
+Click your client to install instantly:
+
+| Client | Install |
+|--------|---------|
+| **Claude Desktop** | [![Claude Desktop](https://img.shields.io/badge/Setup_Guide-5436DA?style=flat-square&logo=anthropic&logoColor=white)](https://modelcontextprotocol.io/quickstart/user) |
+| **Claude Code CLI** | Run: `claude mcp add wemo -- uvx wemo-mcp-server` |
+| **VS Code** | [![Install](https://img.shields.io/badge/One_Click_Install-007ACC?style=flat-square&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=wemo&config=%7B%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22wemo-mcp-server%22%5D%7D) |
+| **Cursor** | [![Add to Cursor](https://img.shields.io/badge/Add_to_Cursor-000000?style=flat-square&logo=cursor&logoColor=white)](cursor://anysphere.cursor-deeplink/mcp/install?name=wemo&config=eyJjb21tYW5kIjoidXZ4IiwiYXJncyI6WyJ3ZW1vLW1jcC1zZXJ2ZXIiXX0%3D) |
+| **Cline** | [Manual config](#cline) (VS Code extension) |
+| **Windsurf** | [Manual config](#windsurf) |
+| **Zed** | [Manual config](#zed) |
+| **Continue** | [Manual config](#continue) (VS Code extension) |
+
+### Manual Configuration
+
+#### Claude Desktop
 
 Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
@@ -95,21 +117,9 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-### Claude Code CLI
+Restart Claude Desktop after saving.
 
-[![Claude Code CLI](https://img.shields.io/badge/Claude_Code-Setup_Guide-8B5CF6?style=for-the-badge&logo=anthropic&logoColor=white)](https://modelcontextprotocol.io/quickstart)
-
-**Quick Command:**
-
-```bash
-claude mcp add wemo -- uvx wemo-mcp-server
-```
-
-### VS Code
-
-[![Install with VS Code](https://img.shields.io/badge/VS_Code-Install_Server-007ACC?style=for-the-badge&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=wemo&config=%7B%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22wemo-mcp-server%22%5D%7D)
-
-**Manual Configuration:**
+#### VS Code
 
 Edit `~/.vscode/mcp.json`:
 
@@ -125,11 +135,9 @@ Edit `~/.vscode/mcp.json`:
 }
 ```
 
-### Cursor
+Reload VS Code after saving.
 
-[![Add to Cursor](https://img.shields.io/badge/Add_to-Cursor-000000?style=for-the-badge&logo=cursor&logoColor=white)](cursor://anysphere.cursor-deeplink/mcp/install?name=wemo&config=eyJjb21tYW5kIjoidXZ4IiwiYXJncyI6WyJ3ZW1vLW1jcC1zZXJ2ZXIiXX0%3D)
-
-**Manual Configuration:**
+#### Cursor
 
 Edit `~/.cursor/mcp.json`:
 
@@ -144,6 +152,77 @@ Edit `~/.cursor/mcp.json`:
   }
 }
 ```
+
+Restart Cursor after saving.
+
+#### Cline
+
+Cline is a VS Code extension. Add to VS Code's `settings.json`:
+
+```json
+{
+  "mcp.servers": {
+    "wemo": {
+      "command": "uvx",
+      "args": ["wemo-mcp-server"]
+    }
+  }
+}
+```
+
+Reload VS Code after saving.
+
+#### Windsurf
+
+Edit `~/.windsurf/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "wemo": {
+      "command": "uvx",
+      "args": ["wemo-mcp-server"]
+    }
+  }
+}
+```
+
+Restart Windsurf after saving.
+
+#### Zed
+
+Edit `~/.config/zed/settings.json`:
+
+```json
+{
+  "context_servers": {
+    "wemo": {
+      "command": "uvx",
+      "args": ["wemo-mcp-server"]
+    }
+  }
+}
+```
+
+Restart Zed after saving.
+
+#### Continue
+
+Continue is a VS Code extension. Edit `~/.continue/config.json`:
+
+```json
+{
+  "mcpServers": [
+    {
+      "name": "wemo",
+      "command": "uvx",
+      "args": ["wemo-mcp-server"]
+    }
+  ]
+}
+```
+
+Reload VS Code after saving.
 
 ---
 
