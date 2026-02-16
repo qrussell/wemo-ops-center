@@ -36,14 +36,15 @@ Trusted publishing uses GitHub OIDC tokens instead of API keys - more secure and
 
 1. **Update version** in both files:
    ```bash
-   # Edit these files to set version (e.g., 0.1.0)
-   mcp/pyproject.toml  # Line 7: version = "0.1.0"
-   mcp/src/wemo_mcp_server/__init__.py  # Line 3: __version__ = "0.1.0"
+   # Edit these files to set version (e.g., 1.0.0)
+   mcp/pyproject.toml  # Line 7: version = "1.0.0"
+   mcp/src/wemo_mcp_server/__init__.py  # Line 3: __version__ = "1.0.0"
    ```
 
-2. **Update CHANGELOG** (create if needed):
+2. **Update CHANGELOG.md**:
    ```bash
-   # Create mcp/CHANGELOG.md with release notes
+   # Add release notes to mcp/CHANGELOG.md
+   # Document all new features, fixes, and breaking changes
    ```
 
 3. **Run tests locally**:
@@ -63,8 +64,8 @@ Trusted publishing uses GitHub OIDC tokens instead of API keys - more secure and
 
 5. **Commit and push**:
    ```bash
-   git add mcp/pyproject.toml mcp/src/wemo_mcp_server/__init__.py
-   git commit -m "Bump version to 0.1.0"
+   git add mcp/pyproject.toml mcp/src/wemo_mcp_server/__init__.py mcp/CHANGELOG.md
+   git commit -m "Release v1.0.0"
    git push origin main
    ```
 
@@ -73,19 +74,19 @@ Trusted publishing uses GitHub OIDC tokens instead of API keys - more secure and
 1. **Create and push a tag**:
    ```bash
    # Tag must start with 'mcp-v' to trigger PyPI workflow
-   git tag mcp-v0.1.0
-   git push origin mcp-v0.1.0
+   git tag mcp-v1.0.0
+   git push origin mcp-v1.0.0
    ```
 
 2. **Create GitHub Release**:
    - Go to: https://github.com/qrussell/wemo-ops-center/releases/new
-   - Select tag: `mcp-v0.1.0`
-   - Release title: `MCP Server v0.1.0`
+   - Select tag: `mcp-v1.0.0`
+   - Release title: `MCP Server v1.0.0`
    - Description:
      ```markdown
-     ## WeMo MCP Server v0.1.0
+     ## WeMo MCP Server v1.0.0
 
-     First release of the WeMo MCP Server for AI assistant integration!
+     🎉 **First stable release** of the WeMo MCP Server for AI assistant integration!
 
      ### Installation
      ```bash
@@ -115,7 +116,7 @@ Trusted publishing uses GitHub OIDC tokens instead of API keys - more secure and
 
 1. **Check PyPI**:
    - Visit: https://pypi.org/project/wemo-mcp-server/
-   - Verify version shows as 0.1.0
+   - Verify version shows as 1.0.0
    - Check that README renders correctly
 
 2. **Test installation**:
@@ -173,7 +174,7 @@ Once published and tested on PyPI:
        }
      },
      "license": "MIT",
-     "version": "0.1.0"
+     "version": "1.0.0"
    }
    ```
 
@@ -191,13 +192,13 @@ Once published and tested on PyPI:
 
 ## Subsequent Releases
 
-For version 0.1.1, 0.2.0, etc:
+For version 1.0.1, 1.1.0, 2.0.0, etc:
 
 1. Update version in `pyproject.toml` and `__init__.py`
-2. Update CHANGELOG.md
-3. Commit: `git commit -m "Bump version to 0.x.x"`
-4. Tag: `git tag mcp-v0.x.x && git push origin mcp-v0.x.x`
-5. Create GitHub release
+2. Update CHANGELOG.md with release notes
+3. Commit: `git commit -m "Release vX.X.X"`
+4. Tag: `git tag mcp-vX.X.X && git push origin mcp-vX.X.X`
+5. Create GitHub release with changelog
 6. Workflow auto-publishes to PyPI
 7. Update MCP registry entry if needed
 
@@ -223,15 +224,15 @@ Test the built package locally before releasing:
 ```bash
 cd mcp
 python -m build
-pip install dist/wemo_mcp_server-0.1.0-py3-none-any.whl
+pip install dist/wemo_mcp_server-1.0.0-py3-none-any.whl
 ```
 
 ### Workflow doesn't trigger
 
 The workflow only triggers for tags starting with `mcp-v`. Make sure your tag follows this pattern:
 ```bash
-git tag mcp-v0.1.0  # ✅ Correct
-git tag v0.1.0      # ❌ Won't trigger
+git tag mcp-v1.0.0  # ✅ Correct
+git tag v1.0.0      # ❌ Won't trigger
 ```
 
 ## Resources

@@ -2,62 +2,89 @@
 
 Control WeMo smart home devices through AI assistants using natural language.
 
-[![Install with Claude Desktop](https://img.shields.io/badge/Claude_Desktop-Install_Server-5436DA?style=for-the-badge&logo=anthropic&logoColor=white)](#claude-desktop-integration)
-[![Install with Claude Code](https://img.shields.io/badge/Claude_Code-Install_Server-8B5CF6?style=for-the-badge&logo=anthropic&logoColor=white)](#claude-code-cli)
-[![Install with VS Code](https://img.shields.io/badge/VS_Code-Install_Server-007ACC?style=for-the-badge&logo=visualstudiocode&logoColor=white)](#vs-code-integration)
-[![Add to Cursor](https://img.shields.io/badge/Add_to-Cursor-000000?style=for-the-badge&logo=cursor&logoColor=white)](cursor://anysphere.cursor-deeplink/mcp/install?name=WeMo%20MCP%20Server&config=eyJjb21tYW5kIjoidXZ4IiwiYXJncyI6WyJ3ZW1vLW1jcC1zZXJ2ZXIiXX0%3D)
-
-[![PyPI version](https://img.shields.io/pypi/v/wemo-mcp-server.svg)](https://pypi.org/project/wemo-mcp-server/)
+[![PyPI version](https://badge.fury.io/py/wemo-mcp-server.svg)](https://pypi.org/project/wemo-mcp-server/)
+[![Publish MCP Server to PyPI](https://github.com/qrussell/wemo-ops-center/actions/workflows/pypi-publish.yml/badge.svg)](https://github.com/qrussell/wemo-ops-center/actions/workflows/pypi-publish.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![MCP](https://img.shields.io/badge/MCP-Server-blue)](https://modelcontextprotocol.io)
 
-## Quick Start
+## Table of Contents
 
-Install this package:
-
-```bash
-pip install wemo-mcp-server
-```
-
-or use [uvx](https://docs.astral.sh/uv/) for isolated execution:
-
-```bash
-uvx wemo-mcp-server
-```
-
-Then click one of the badges above to add to your MCP client, or see [Configuration](#configuration) for manual setup.
+- [Overview](#overview)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [MCP Tools](#mcp-tools)
+  - [scan_network](#1-scan_network)
+  - [list_devices](#2-list_devices)
+  - [get_device_status](#3-get_device_status)
+  - [control_device](#4-control_device)
+  - [rename_device](#5-rename_device)
+  - [get_homekit_code](#6-get_homekit_code)
+- [How It Works](#how-it-works)
+- [Feature Comparison](#feature-comparison)
+- [Development](#development)
+- [Contributing](#contributing)
+- [License](#license)
+- [Acknowledgments](#acknowledgments)
 
 ## Overview
 
-This MCP server provides seamless integration with WeMo smart home devices, enabling discovery, monitoring, and control through the Model Context Protocol. Built on the proven [pywemo](https://github.com/pywemo/pywemo) library, it offers reliable device management with intelligent multi-phase discovery.
+Seamlessly integrate WeMo smart home devices with AI assistants through the Model Context Protocol. Built on [pywemo](https://github.com/pywemo/pywemo), this server enables natural language control of your WeMo devices with intelligent multi-phase discovery.
 
-### Example: Controlling Devices with Claude
+### Example Usage
 
-![Claude Desktop controlling WeMo devices](assets/claude-example.png)
+![Claude Desktop controlling WeMo devices](https://raw.githubusercontent.com/qrussell/wemo-ops-center/main/mcp/assets/claude-example.png)
 
-*Natural language control of WeMo devices through Claude Desktop - just ask in plain English and the MCP server handles the rest.*
+*Control WeMo devices through Claude Desktop with natural language - just ask in plain English!*
 
-## Features
+### Key Features
 
-- **🔍 Smart Discovery**: Multi-phase device discovery combining UPnP/SSDP multicast and network scanning
-- **⚡ Fast Scanning**: Parallel network probing with configurable concurrency (23-30s for full subnet)
-- **🎛️ Device Control**: Turn devices on/off, toggle state, and control brightness for dimmers
-- **✏️ Device Management**: Rename devices and extract HomeKit setup codes
-- **📊 Status Monitoring**: Real-time device state and brightness queries
-- **💾 Device Caching**: Automatic caching of discovered devices for quick access
-- **🔌 MCP Integration**: Works with any MCP-compatible application (Claude Desktop, VS Code, etc.)
+- **🔍 Smart Discovery** - Multi-phase scanning (UPnP/SSDP + network ports) with 100% reliability
+- **⚡ Fast Scanning** - Parallel probes with 60 concurrent workers (~23-30s for full subnet)
+- **🎛️ Full Control** - On/off/toggle/brightness control for all device types  
+- **✏️ Device Management** - Rename devices and extract HomeKit setup codes
+- **📊 Real-time Status** - Query device state and brightness
+- **💾 Smart Caching** - Automatic device caching for instant access
+- **🔌 Universal** - Works with any MCP client (Claude, VS Code, Cursor, etc.)
 
-## Configuration
+---
+
+## Prerequisites
+
+All configurations use `uvx` (from the `uv` Python package manager) to run the server. Install [uv](https://docs.astral.sh/uv/) first:
+
+```bash
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# macOS with Homebrew
+brew install uv
+
+# Windows
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+After installation, restart your terminal and verify:
+```bash
+uvx --version
+```
+
+## Installation
+
+Choose your MCP client and click the badge for one-click setup, or configure manually:
 
 ### Claude Desktop
+
+[![Claude Desktop](https://img.shields.io/badge/Claude_Desktop-Setup_Guide-5436DA?style=for-the-badge&logo=anthropic&logoColor=white)](https://modelcontextprotocol.io/quickstart/user)
+
+**Manual Configuration:**
 
 Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
-    "wemo-mcp-server": {
+    "wemo": {
       "command": "uvx",
       "args": ["wemo-mcp-server"]
     }
@@ -67,18 +94,26 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ### Claude Code CLI
 
+[![Claude Code CLI](https://img.shields.io/badge/Claude_Code-Setup_Guide-8B5CF6?style=for-the-badge&logo=anthropic&logoColor=white)](https://modelcontextprotocol.io/quickstart)
+
+**Quick Command:**
+
 ```bash
-claude mcp add wemo-mcp-server --command uvx --args wemo-mcp-server
+claude mcp add wemo -- uvx wemo-mcp-server
 ```
 
 ### VS Code
+
+[![Install with VS Code](https://img.shields.io/badge/VS_Code-Install_Server-007ACC?style=for-the-badge&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=wemo&config=%7B%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22wemo-mcp-server%22%5D%7D)
+
+**Manual Configuration:**
 
 Edit `~/.vscode/mcp.json`:
 
 ```json
 {
   "servers": {
-    "wemo-mcp-server": {
+    "wemo": {
       "type": "stdio",
       "command": "uvx",
       "args": ["wemo-mcp-server"]
@@ -89,12 +124,16 @@ Edit `~/.vscode/mcp.json`:
 
 ### Cursor
 
-Click the "Add to Cursor" badge above, or edit `~/.cursor/mcp.json`:
+[![Add to Cursor](https://img.shields.io/badge/Add_to-Cursor-000000?style=for-the-badge&logo=cursor&logoColor=white)](cursor://anysphere.cursor-deeplink/mcp/install?name=wemo&config=eyJjb21tYW5kIjoidXZ4IiwiYXJncyI6WyJ3ZW1vLW1jcC1zZXJ2ZXIiXX0%3D)
+
+**Manual Configuration:**
+
+Edit `~/.cursor/mcp.json`:
 
 ```json
 {
   "servers": {
-    "wemo-mcp-server": {
+    "wemo": {
       "type": "stdio",
       "command": "uvx",
       "args": ["wemo-mcp-server"]
@@ -103,7 +142,9 @@ Click the "Add to Cursor" badge above, or edit `~/.cursor/mcp.json`:
 }
 ```
 
-## Available Tools
+---
+
+## MCP Tools
 
 ### 1. scan_network
 
