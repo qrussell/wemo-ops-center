@@ -2,6 +2,8 @@
 
 Control WeMo smart home devices through AI assistants using natural language.
 
+**mcp-name: io.github.qrussell/wemo**
+
 [![PyPI version](https://badge.fury.io/py/wemo-mcp-server.svg)](https://pypi.org/project/wemo-mcp-server/)
 [![Publish MCP Server to PyPI](https://github.com/qrussell/wemo-ops-center/actions/workflows/pypi-publish.yml/badge.svg)](https://github.com/qrussell/wemo-ops-center/actions/workflows/pypi-publish.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)

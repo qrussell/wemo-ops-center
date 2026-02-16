@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wemo-mcp-server"
-version = "1.0.0"
+version = "1.0.1"
 description = "Model Context Protocol server for WeMo smart home device discovery and control"
 authors = [
     {name = "apiarya", email = "izzasnvyp7@privaterelay.appleid.com"}
