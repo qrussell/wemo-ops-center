@@ -14,6 +14,7 @@ import concurrent.futures
 import webbrowser
 import re
 import tempfile
+import platform
 from tkinter import messagebox
 import pyperclip
 
@@ -26,7 +27,7 @@ except ImportError:
     HAS_QR = False
 
 # --- CONFIGURATION ---
-VERSION = "v5.2.3-Stable"
+VERSION = "v5.2.4-1"
 SERVER_PORT = 5050
 SERVER_URL = f"http://localhost:{SERVER_PORT}"
 UPDATE_API_URL = "https://api.github.com/repos/qrussell/wemo-ops-center/releases/latest"
@@ -47,6 +48,28 @@ if not os.path.exists(APP_DATA_DIR):
 PROFILE_FILE = os.path.join(APP_DATA_DIR, "wifi_profiles.json")
 SCHEDULE_FILE = os.path.join(APP_DATA_DIR, "schedules.json")
 SETTINGS_FILE = os.path.join(APP_DATA_DIR, "settings.json")
+
+# --- SERVICE & INSTALLER DETECTION ---
+BASE_DIR = os.path.dirname(os.path.abspath(sys.argv[0]))
+
+if sys.platform == "win32":
+    SERVICE_EXE_PATH = os.path.join(APP_DATA_DIR, "wemo_service.exe")
+else:
+    possible_paths = [
+        os.path.join(APP_DATA_DIR, "wemo_service"),
+        "/opt/WemoOps/wemo_service",
+        "/usr/bin/wemo_service"
+    ]
+    SERVICE_EXE_PATH = None
+    for p in possible_paths:
+        if os.path.exists(p):
+            SERVICE_EXE_PATH = p
+            break
+    if not SERVICE_EXE_PATH:
+        SERVICE_EXE_PATH = os.path.join(APP_DATA_DIR, "wemo_service")
+
+if getattr(sys, 'frozen', False):
+    os.environ['PATH'] += os.pathsep + sys._MEIPASS
 
 # --- STYLING CONSTANTS ---
 COLOR_BG = ("#ebebeb", "#242424")           
@@ -71,7 +94,7 @@ FONT_BODY = ("Roboto", 14)
 FONT_MONO = ("Consolas", 13)
 
 # ==============================================================================
-#  API CLIENT (With Device Fetching)
+#  API CLIENT
 # ==============================================================================
 class APIClient:
     def __init__(self):
@@ -88,9 +111,22 @@ class APIClient:
         return False
 
     def get_devices(self):
-        # [NEW] Fetch device list from Server to avoid broadcast race conditions
         try: return requests.get(f"{SERVER_URL}/api/devices", timeout=1).json()
         except: return []
+
+    def get_schedules(self):
+        try: return requests.get(f"{SERVER_URL}/api/schedules", timeout=2).json()
+        except: return []
+
+    def add_schedule(self, data):
+        try: 
+            r = requests.post(f"{SERVER_URL}/api/schedules", json=data, timeout=2)
+            return r.status_code == 200
+        except: return False
+
+    def delete_schedule(self, jid):
+        try: requests.delete(f"{SERVER_URL}/api/schedules?id={jid}", timeout=2)
+        except: pass
 
 # ==============================================================================
 #  NETWORK UTILS
@@ -139,9 +175,6 @@ class NetworkUtils:
         except: pass
         return [ssid for ssid in list(set(wemos)) if "wemo" in ssid.lower() or "belkin" in ssid.lower()]
 
-# ==============================================================================
-#  DEEP SCANNER
-# ==============================================================================
 class DeepScanner:
     def probe_port(self, ip, ports=[49152, 49153, 49154, 49155], timeout=0.6):
         for port in ports:
@@ -165,7 +198,7 @@ class DeepScanner:
         if status_callback: status_callback(f"Probing {len(all_hosts)} IPs (Deep)...")
         
         active_ips = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=60) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
             futures = {executor.submit(self.probe_port, ip): ip for ip in all_hosts}
             for future in concurrent.futures.as_completed(futures):
                 result = future.result()
@@ -184,68 +217,8 @@ class DeepScanner:
                 except: pass
         return found_devices
 
-class SolarEngine:
-    def __init__(self):
-        self.lat = None; self.lng = None; self.solar_times = {}; self.last_fetch = None
-    
-    def detect_location(self):
-        try:
-            r = requests.get("https://ipinfo.io/json", timeout=2)
-            data = r.json()
-            loc = data.get("loc", "").split(",")
-            if len(loc) == 2:
-                self.lat, self.lng = loc[0], loc[1]
-                return True
-        except: pass
-        return False
-
-    def get_solar_times(self):
-        today = datetime.date.today()
-        if self.last_fetch == today and self.solar_times: return self.solar_times
-        if not self.lat:
-            if not self.detect_location(): return None
-
-        try:
-            url = f"https://api.sunrise-sunset.org/json?lat={self.lat}&lng={self.lng}&formatted=0"
-            r = requests.get(url, timeout=5)
-            data = r.json()
-            if data["status"] == "OK":
-                res = data["results"]
-                def to_local(utc_str):
-                    try:
-                        dt_utc = datetime.datetime.fromisoformat(utc_str)
-                        dt_local = dt_utc.astimezone()
-                        return dt_local.strftime("%H:%M")
-                    except: return "00:00"
-                self.solar_times = {
-                    "sunrise": to_local(res["sunrise"]),
-                    "sunset": to_local(res["sunset"])
-                }
-                self.last_fetch = today
-                return self.solar_times
-        except: pass
-        return None
-
 # ==============================================================================
-#  UPDATE MANAGER
-# ==============================================================================
-class UpdateManager:
-    @staticmethod
-    def check_for_updates(current_version_str, api_url):
-        if not api_url: return False, None
-        try:
-            headers = {'User-Agent': 'WemoOps-Updater'}
-            r = requests.get(api_url, headers=headers, timeout=3)
-            if r.status_code == 200:
-                data = r.json()
-                remote_tag = data.get("tag_name", "").strip() 
-                if not remote_tag: return False, None
-                return True, remote_tag
-        except: pass
-        return False, None
-
-# ==============================================================================
-#  WIFI AUTOMATOR
+#  WIFI AUTOMATOR (Smart Connect)
 # ==============================================================================
 class WifiAutomator:
     @staticmethod
@@ -273,6 +246,33 @@ class WifiAutomator:
         return False
 
 # ==============================================================================
+#  SOLAR ENGINE
+# ==============================================================================
+class SolarEngine:
+    def __init__(self):
+        self.lat = None; self.lng = None; self.solar_times = {}; self.last_fetch = None
+    
+    def get_solar_times(self):
+        today = datetime.date.today()
+        if self.last_fetch == today: return self.solar_times
+        if not self.lat:
+            try:
+                r = requests.get("https://ipinfo.io/json", timeout=2)
+                loc = r.json().get("loc", "").split(",")
+                self.lat, self.lng = loc[0], loc[1]
+            except: return None
+        try:
+            url = f"https://api.sunrise-sunset.org/json?lat={self.lat}&lng={self.lng}&formatted=0"
+            r = requests.get(url, timeout=5)
+            res = r.json()["results"]
+            def to_local(utc_str):
+                return datetime.datetime.fromisoformat(utc_str).astimezone().strftime("%H:%M")
+            self.solar_times = {"sunrise": to_local(res["sunrise"]), "sunset": to_local(res["sunset"])}
+            self.last_fetch = today
+            return self.solar_times
+        except: return None
+
+# ==============================================================================
 #  MAIN APP
 # ==============================================================================
 class WemoOpsApp(ctk.CTk):
@@ -280,9 +280,7 @@ class WemoOpsApp(ctk.CTk):
         super().__init__()
         self.title(f"Wemo Ops Center {VERSION}")
         self.geometry("1100x800")
-        
         self.set_icon(self)
-
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
@@ -320,12 +318,25 @@ class WemoOpsApp(ctk.CTk):
         self.btn_sched = self.create_nav_btn("Automation", "sched")
         self.btn_maint = self.create_nav_btn("Maintenance", "maint")
         
+        # --- INTEGRATIONS BUTTON ---
+        self.btn_bridge = self.create_nav_btn("Integrations", "bridge")
+        
         ctk.CTkFrame(self.sidebar, fg_color="transparent").pack(expand=True)
         
         if HAS_QR:
             ctk.CTkButton(self.sidebar, text="📱 Mobile App", fg_color=COLOR_ACCENT, command=self.show_qr_code).pack(pady=5, padx=10)
 
         self.btn_settings = self.create_nav_btn("Settings", "settings")
+
+        self.service_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        self.service_frame.pack(side="bottom", fill="x", pady=20, padx=10)
+        self.svc_lbl = ctk.CTkLabel(self.service_frame, text="Service Status:", font=("Arial", 12, "bold"), text_color=COLOR_TEXT)
+        self.svc_lbl.pack(anchor="w")
+        self.svc_status = ctk.CTkLabel(self.service_frame, text="Checking...", text_color="gray", font=FONT_BODY)
+        self.svc_status.pack(anchor="w")
+        
+        self.btn_start_svc = ctk.CTkButton(self.service_frame, text="▶ Start Service", width=100, fg_color="#2d8a4e", command=self.start_local_server)
+        self.btn_start_svc.pack(pady=(5,0), anchor="w")
 
         self.btn_update = ctk.CTkButton(self.sidebar, text="⬇ Update Available", fg_color=COLOR_UPDATE, 
                                         font=FONT_BODY, command=lambda: webbrowser.open(UPDATE_PAGE_URL))
@@ -345,6 +356,7 @@ class WemoOpsApp(ctk.CTk):
         self.create_schedule_ui()
         self.create_maintenance_ui()
         self.create_settings_ui()
+        self.create_bridges_ui()
         
         self.show_tab("dash")
         self.after(500, self.refresh_network)
@@ -378,8 +390,7 @@ class WemoOpsApp(ctk.CTk):
             icon_path = os.path.join(base_path, "app_icon.ico")
             if os.path.exists(icon_path):
                 window.iconbitmap(icon_path)
-        except Exception:
-            pass
+        except Exception: pass
 
     def create_nav_btn(self, text, view_name):
         btn = ctk.CTkButton(self.sidebar, text=f"  {text}", anchor="w", 
@@ -393,7 +404,7 @@ class WemoOpsApp(ctk.CTk):
     def show_tab(self, name):
         for key, frame in self.frames.items(): frame.pack_forget()
         self.frames[name].pack(fill="both", expand=True)
-        for key in ["dash", "prov", "sched", "maint", "settings"]:
+        for key in ["dash", "prov", "sched", "maint", "settings", "bridge"]:
             btn = getattr(self, f"btn_{key}")
             btn.configure(fg_color="transparent", text_color=COLOR_TEXT)
         active_btn = getattr(self, f"btn_{name}")
@@ -403,115 +414,151 @@ class WemoOpsApp(ctk.CTk):
         self.api.check_connection()
         try:
             if self.api.connected:
-                self.sched_mode_lbl.configure(text="MODE: SERVER (Remote)", text_color=COLOR_ACCENT)
+                self.svc_status.configure(text="✅ RUNNING", text_color="#28a745")
+                self.btn_start_svc.pack_forget()
             else:
-                self.sched_mode_lbl.configure(text="MODE: LOCAL (PC)", text_color="orange")
+                self.svc_status.configure(text="⚠️ STOPPED", text_color="orange")
+                self.btn_start_svc.pack(pady=(5,0), anchor="w")
         except: pass
         self.after(5000, self.server_heartbeat)
+
+    # --- INTEGRATIONS (HOOBS) ---
+    def create_bridges_ui(self):
+        f = ctk.CTkFrame(self.content, fg_color="transparent"); self.frames["bridge"] = f
+        ctk.CTkLabel(f, text="HOOBS & Homebridge Integration", font=FONT_H1, text_color=COLOR_TEXT).pack(pady=20)
+        
+        c = ctk.CTkFrame(f, fg_color=COLOR_CARD)
+        c.pack(fill="both", expand=True, padx=20, pady=10)
+        
+        # --- Config Generator ---
+        ctk.CTkLabel(c, text="1. Configuration Generator", font=FONT_H2, text_color=COLOR_TEXT).pack(pady=(20, 5), anchor="w", padx=20)
+        ctk.CTkLabel(c, text="Generates the 'config.json' block for the 'homebridge-platform-wemo' plugin.", 
+                     font=FONT_BODY, text_color=COLOR_SUBTEXT).pack(pady=0, anchor="w", padx=20)
+        
+        ctk.CTkButton(c, text="Scan & Generate Config", height=30,
+                      fg_color=COLOR_ACCENT, command=self.generate_hoobs_config).pack(pady=10, padx=20, anchor="w")
+        
+        self.hoobs_text = ctk.CTkTextbox(c, font=FONT_MONO, height=150)
+        self.hoobs_text.pack(fill="x", padx=20, pady=5)
+        
+        ctk.CTkButton(c, text="Copy Config", fg_color=COLOR_BTN_SECONDARY, text_color=COLOR_BTN_TEXT, width=100,
+                      command=lambda: pyperclip.copy(self.hoobs_text.get("1.0", "end"))).pack(pady=5, padx=20, anchor="e")
+
+        # --- Installer Section ---
+        ctk.CTkLabel(c, text="2. Software Installation", font=FONT_H2, text_color=COLOR_TEXT).pack(pady=(20, 5), anchor="w", padx=20)
+        ctk.CTkLabel(c, text="Automatically install Homebridge, the Dashboard, and Wemo Plugins on this computer.", 
+                     font=FONT_BODY, text_color=COLOR_SUBTEXT).pack(pady=0, anchor="w", padx=20)
+        
+        self.btn_install_hoobs = ctk.CTkButton(c, text="Install Compatibility Layer", height=40, fg_color=COLOR_SUCCESS, command=self.run_hoobs_installer)
+        self.btn_install_hoobs.pack(pady=20, padx=20, fill="x")
+
+    def generate_hoobs_config(self):
+        devices = []
+        if not self.known_devices_map:
+            messagebox.showwarning("No Devices", "No devices found yet. Please go to Dashboard and SCAN first.")
+            return
+        
+        for dev in self.known_devices_map.values():
+            try:
+                mac = getattr(dev, 'mac', 'UNKNOWN').replace(':', '')
+                devices.append(f'"{mac}"')
+            except: pass
+        
+        json_str = "{\n"
+        json_str += '    "platform": "BelkinWeMo",\n'
+        json_str += '    "name": "WeMo Platform",\n'
+        json_str += '    "noMotionTimer": 60,\n'
+        json_str += '    "discovery": false,\n' 
+        json_str += '    "manual_devices": [\n'
+        json_str += "        " + ",\n        ".join(devices) + "\n"
+        json_str += '    ]\n'
+        json_str += "}"
+        self.hoobs_text.delete("1.0", "end")
+        self.hoobs_text.insert("1.0", json_str)
+
+    def run_hoobs_installer(self):
+        # Locate the installer
+        target = None
+        # Check for EXE first (bundled)
+        exe_path = os.path.join(os.path.dirname(sys.executable), "Wemo_HOOBS_Integration_Setup.exe")
+        if not os.path.exists(exe_path):
+            exe_path = "Wemo_HOOBS_Integration_Setup.exe" # Current dir
+        
+        script_path = "hoobs_installer.py"
+        
+        if os.path.exists(exe_path):
+            target = exe_path
+            is_script = False
+        elif os.path.exists(script_path):
+            target = script_path
+            is_script = True
+        else:
+            messagebox.showerror("Missing Component", "Could not find 'hoobs_installer.py' or 'Wemo_HOOBS_Integration_Setup.exe' in the application directory.")
+            return
+
+        # Execute with Elevation
+        try:
+            if sys.platform == "win32":
+                import ctypes
+                if is_script:
+                    ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, target, None, 1)
+                else:
+                    ctypes.windll.shell32.ShellExecuteW(None, "runas", target, "", None, 1)
+            else:
+                # Linux/Mac
+                if is_script:
+                    cmd = f"sudo python3 {target}"
+                    try:
+                        subprocess.Popen(['xterm', '-e', cmd])
+                    except:
+                        try:
+                            subprocess.Popen(['gnome-terminal', '--', 'bash', '-c', f'{cmd}; read line'])
+                        except:
+                            subprocess.Popen(cmd.split(), shell=True)
+                            messagebox.showinfo("Launched", "Installer launched in background (check terminal if visible).")
+        except Exception as e:
+            messagebox.showerror("Launch Error", f"Failed to launch installer: {e}")
 
     # --- DASHBOARD ---
     def create_dashboard(self):
         f = ctk.CTkFrame(self.content, fg_color="transparent"); self.frames["dash"] = f
-        
         head = ctk.CTkFrame(f, fg_color="transparent"); head.pack(fill="x", pady=(0, 20))
-        ctk.CTkLabel(head, text="Network Overview", font=FONT_H1, text_color=COLOR_TEXT).pack(side="left", anchor="n")
+        ctk.CTkLabel(head, text="Network Overview (Local)", font=FONT_H1, text_color=COLOR_TEXT).pack(side="left")
         
-        right_panel = ctk.CTkFrame(head, fg_color="transparent")
-        right_panel.pack(side="right", anchor="e")
-        
-        ctrl_row = ctk.CTkFrame(right_panel, fg_color="transparent")
-        ctrl_row.pack(side="top", anchor="e")
-        
-        self.subnet_combo = ctk.CTkComboBox(ctrl_row, width=180, values=self.saved_subnets)
-        self.subnet_combo.pack(side="left", padx=(0, 5))
+        ctrl = ctk.CTkFrame(head, fg_color="transparent"); ctrl.pack(side="right")
+        self.subnet_combo = ctk.CTkComboBox(ctrl, width=200, values=self.saved_subnets); self.subnet_combo.pack(side="left", padx=5)
         self.subnet_combo.set(NetworkUtils.get_subnet_cidr())
-        
-        ctk.CTkButton(ctrl_row, text="Save", width=50, command=self.save_subnet, fg_color=COLOR_ACCENT).pack(side="left", padx=2)
-        ctk.CTkButton(ctrl_row, text="Del", width=50, command=self.delete_subnet, fg_color=COLOR_DANGER).pack(side="left", padx=(2, 10))
-        
-        self.use_deep_scan = ctk.BooleanVar(value=False)
-        ctk.CTkCheckBox(ctrl_row, text="Deep Scan", variable=self.use_deep_scan, width=80).pack(side="left", padx=5)
-        ctk.CTkButton(ctrl_row, text="Scan", width=100, command=self.run_local_scan, fg_color=COLOR_ACCENT).pack(side="left", padx=5)
-        
-        self.scan_status = ctk.CTkLabel(right_panel, text="Ready", text_color="orange", font=("Arial", 12))
-        self.scan_status.pack(side="top", anchor="e", padx=10, pady=(2, 0))
+        ctk.CTkButton(ctrl, text="Scan", width=100, command=self.run_local_scan, fg_color=COLOR_ACCENT).pack(side="left", padx=5)
+        self.scan_status = ctk.CTkLabel(ctrl, text="", text_color="orange"); self.scan_status.pack(side="left", padx=10)
         
         self.dev_list = ctk.CTkScrollableFrame(f, label_text="Devices", label_text_color=COLOR_TEXT); self.dev_list.pack(fill="both", expand=True)
 
-    def save_subnet(self):
-        s = self.subnet_combo.get().strip()
-        if s and s not in self.saved_subnets:
-            self.saved_subnets.append(s)
-            self.settings["subnets"] = self.saved_subnets
-            self.save_json(SETTINGS_FILE, self.settings)
-            self.subnet_combo.configure(values=self.saved_subnets)
-            self.scan_status.configure(text="Subnet Saved")
-            
-    def delete_subnet(self):
-        s = self.subnet_combo.get().strip()
-        if s in self.saved_subnets:
-            self.saved_subnets.remove(s)
-            self.settings["subnets"] = self.saved_subnets
-            self.save_json(SETTINGS_FILE, self.settings)
-            self.subnet_combo.configure(values=self.saved_subnets)
-            self.subnet_combo.set(NetworkUtils.get_subnet_cidr()) 
-            self.scan_status.configure(text="Subnet Deleted")
-
     def run_local_scan(self):
         subnet = self.subnet_combo.get().strip()
-        is_deep = self.use_deep_scan.get() 
-        self.scan_status.configure(text="Initializing...")
+        if subnet and subnet not in self.saved_subnets:
+            self.saved_subnets.append(subnet)
+            self.settings["subnets"] = self.saved_subnets
+            self.save_json(SETTINGS_FILE, self.settings)
         
-        # [FIX] DELEGATED SCANNING: Check Server First
-        if self.api.connected:
-            self.scan_status.configure(text="Fetching from Server...")
-            threading.Thread(target=self._server_sync_task, daemon=True).start()
-        else:
-            threading.Thread(target=self._scan_task, args=(subnet, is_deep), daemon=True).start()
+        self.scan_status.configure(text="Scanning...")
+        threading.Thread(target=self._scan_task, args=(subnet,), daemon=True).start()
 
-    def _server_sync_task(self):
-        # [NEW] Download devices from Server API (Instant)
-        try:
-            devices_data = self.api.get_devices()
-            new_map = {}
-            for d_data in devices_data:
-                # Reconstruct a usable Device object from JSON data
-                # We use device_from_description to get a full object efficiently via Unicast
-                ip = d_data.get('ip')
-                if ip:
-                    for port in [49153, 49152, 49154, 49155]:
-                        try:
-                            url = f"http://{ip}:{port}/setup.xml"
-                            dev = pywemo.discovery.device_from_description(url)
-                            if dev:
-                                new_map[dev.name] = dev
-                                break
-                        except: pass
-            
-            self.known_devices_map = new_map
-            self.after(0, lambda: self.scan_status.configure(text="Synced with Server"))
-            self.after(0, self.render_devices)
-            self.after(0, self.update_maint_dropdown)
-            self.after(0, self.update_schedule_dropdown)
-        except:
-            self.after(0, lambda: self.scan_status.configure(text="Server Sync Failed"))
-
-    def _scan_task(self, subnet, use_deep):
+    def _scan_task(self, subnet):
         def log(m): self.after(0, lambda: self.scan_status.configure(text=m))
         try:
-            log("Quick Scan (SSDP)...")
+            log("SSDP Scan...")
             new_map = {}
             for d in pywemo.discover_devices(): 
                 new_map[d.name] = d
             
-            if use_deep and subnet:
-                log(f"Deep Probing {subnet}...")
-                deep_devs = self.scanner.scan_subnet(subnet, status_callback=log) 
+            if subnet:
+                log(f"Scanning {subnet}...")
+                deep_devs = self.scanner.scan_subnet(subnet)
                 for d in deep_devs:
                     new_map[d.name] = d
             
             self.known_devices_map = new_map
-            log("Done.")
+            log("")
             self.after(0, self.render_devices)
             self.after(0, self.update_maint_dropdown)
             self.after(0, self.update_schedule_dropdown)
@@ -547,12 +594,9 @@ class WemoOpsApp(ctk.CTk):
         
         def tog(d=dev): threading.Thread(target=d.toggle, daemon=True).start()
         sw = ctk.CTkSwitch(t, text="Power", command=tog, text_color=COLOR_TEXT); sw.pack(side="right")
-        
         self.device_switches[dev.name] = sw
-        
         try:
-            state = dev.get_state(force_update=False) 
-            if state: sw.select()
+            if dev.get_state(force_update=False): sw.select()
         except: pass
 
         m = ctk.CTkFrame(c, fg_color="transparent"); m.pack(fill="x", padx=10)
@@ -588,7 +632,7 @@ class WemoOpsApp(ctk.CTk):
                 else: self.after(0, lambda: messagebox.showwarning("Error", "No Code Found"))
         except: pass
 
-    # --- STATE POLLER (NEW) ---
+    # --- STATE POLLER ---
     def _state_poller(self):
         while self.monitoring:
             try:
@@ -601,7 +645,6 @@ class WemoOpsApp(ctk.CTk):
                 for name, dev in self.known_devices_map.items():
                     if name in self.device_switches:
                         try:
-                            # FORCE UPDATE from physical device
                             state = dev.get_state(force_update=True)
                             self.after(0, lambda n=name, s=state: self._update_switch_safe(n, s))
                         except: pass
@@ -621,7 +664,7 @@ class WemoOpsApp(ctk.CTk):
         f = ctk.CTkFrame(self.content, fg_color="transparent"); self.frames["prov"] = f
         f.columnconfigure(0, weight=1); f.columnconfigure(1, weight=2); f.rowconfigure(0, weight=1)
         lc = ctk.CTkFrame(f, fg_color="transparent"); lc.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
-        ctk.CTkLabel(lc, text="Step 1: Locate Device", font=FONT_H2, text_color=COLOR_TEXT).pack(anchor="w", pady=(0,5))
+        ctk.CTkLabel(lc, text="Step 1: Locate Device", font=FONT_H1, text_color=COLOR_TEXT).pack(anchor="w", pady=(0,5))
         sf = ctk.CTkFrame(lc, fg_color=COLOR_FRAME); sf.pack(fill="x", pady=(0, 20))
         self.btn_scan_setup = ctk.CTkButton(sf, text="Scan Airwaves", command=self.scan_ssids, fg_color=COLOR_ACCENT); self.btn_scan_setup.pack(pady=10, padx=10, fill="x")
         self.ssid_list = ctk.CTkScrollableFrame(sf, height=100, label_text="Nearby Networks", label_text_color=COLOR_TEXT); self.ssid_list.pack(fill="x", padx=10, pady=(0,10))
@@ -657,30 +700,11 @@ class WemoOpsApp(ctk.CTk):
         self.log_prov(f"--- Configuring {ip} ---")
         try:
             url = f"http://{ip}:{pt or 49153}/setup.xml"
-            self.log_prov(f"Targeting URL: {url}")
             dev = pywemo.discovery.device_from_description(url)
-            
-            if n and hasattr(dev, 'basicevent'): 
-                self.log_prov(f"Setting Name to: {n}")
-                dev.basicevent.ChangeFriendlyName(FriendlyName=n)
-                time.sleep(1)
-            
-            self.log_prov("Starting Adaptive Encryption Loop (Smart Loop)...")
-            success = False
+            if n and hasattr(dev, 'basicevent'): dev.basicevent.ChangeFriendlyName(FriendlyName=n); time.sleep(1)
             for m in [2,1,0]:
-                for length in [True, False]:
-                    try: 
-                        self.log_prov(f"Attempting: Method {m}, Len={length}...")
-                        dev.setup(ssid=s, password=p, _encrypt_method=m, _add_password_lengths=length)
-                        self.log_prov("SUCCESS! Credentials Accepted.")
-                        success = True
-                        break
-                    except: pass
-                if success: break
-            
-            if success: self.log_prov("Device is rebooting. Connect PC back to Home Wi-Fi.")
-            else: self.log_prov("FAILED: All attempts rejected by device.")
-            
+                try: dev.setup(ssid=s, password=p, _encrypt_method=m); self.log_prov("SUCCESS! Rebooting..."); break
+                except: pass
         except Exception as e: self.log_prov(f"Error: {e}")
         self.prov_btn.configure(state="normal", text="Push Configuration")
 
@@ -700,6 +724,7 @@ class WemoOpsApp(ctk.CTk):
         c = ctk.CTkFrame(self.ssid_list, fg_color=COLOR_FRAME); c.pack(fill="x", pady=2, padx=5)
         ctk.CTkLabel(c, text=s, font=("Arial", 12, "bold"), text_color=COLOR_TEXT).pack(side="left", padx=10)
         
+        # --- CONNECT BUTTON ---
         if WifiAutomator.can_automate(): 
             def connect_action(ssid=s):
                 self.log_prov(f"Connecting to {ssid}...")
@@ -711,10 +736,12 @@ class WemoOpsApp(ctk.CTk):
 
     def _connect_task(self, ssid):
         success = WifiAutomator.connect_open_network(ssid)
-        if success: self.log_prov(f"Success: Connected to {ssid}")
-        else: self.log_prov(f"Failed to connect to {ssid}. Try manual connection.")
+        if success:
+            self.log_prov(f"Success: Connected to {ssid}")
+        else:
+            self.log_prov(f"Failed to connect to {ssid}. Try manual connection.")
 
-    # --- MISSING PROFILE METHODS ADDED HERE ---
+    # --- PROFILE METHODS ---
     def apply_profile(self, c):
         if c in self.profiles:
             self.ssid_entry.delete(0, "end")
@@ -738,7 +765,7 @@ class WemoOpsApp(ctk.CTk):
             self.profile_combo.configure(values=["Select Saved Profile..."] + list(self.profiles.keys()))
             self.profile_combo.set("Select Saved Profile...")
 
-    # --- AUTOMATION / SCHEDULER (Hybrid Engine) ---
+    # --- AUTOMATION / SCHEDULER ---
     def create_schedule_ui(self):
         frame = ctk.CTkFrame(self.content, fg_color="transparent")
         self.frames["sched"] = frame
@@ -878,6 +905,9 @@ class WemoOpsApp(ctk.CTk):
             ctk.CTkButton(row, text="Del", width=40, fg_color=COLOR_DANGER, command=lambda j=job: self.delete_job(j["id"])).pack(side="right", padx=5)
 
     def delete_job(self, jid):
+        # Try server delete
+        self.api.delete_schedule(jid)
+        # Always clean local cache too
         self.schedules = [j for j in self.schedules if j["id"] != jid]
         self.save_json(SCHEDULE_FILE, self.schedules)
         self.render_jobs()
@@ -897,8 +927,11 @@ class WemoOpsApp(ctk.CTk):
                                 self.after(0, self.render_jobs)
                 
                 if self.api.connected:
+                    self.sched_mode_lbl.configure(text="MODE: SERVER", text_color=COLOR_ACCENT)
                     time.sleep(2) 
                     continue
+                else:
+                    self.sched_mode_lbl.configure(text="MODE: LOCAL", text_color="orange")
 
                 now = datetime.datetime.now()
                 today_str = now.strftime("%Y-%m-%d")
@@ -1003,67 +1036,25 @@ class WemoOpsApp(ctk.CTk):
             ip = NetworkUtils.get_local_ip()
             url = f"http://{ip}:{SERVER_PORT}"
             
-            qr = qrcode.QRCode(box_size=10, border=4)
-            qr.add_data(url)
-            qr.make(fit=True)
-            
-            # Use native RGB conversion for CTkImage
-            img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
-            qr_ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(250, 250))
-            
-            # Create Window
-            win = ctk.CTkToplevel(self)
-            win.title("Mobile App")
-            
-            # [FIX 1] Apply Icon Immediately
+            qr = qrcode.QRCode(box_size=10, border=4); qr.add_data(url); qr.make(fit=True)
+            img = ctk.CTkImage(light_image=qr.make_image(fill_color="black", back_color="white").convert("RGB"), dark_image=qr.make_image(fill_color="black", back_color="white").convert("RGB"), size=(250, 250))
+            win = ctk.CTkToplevel(self); win.title("Mobile App"); win.geometry("400x480"); win.transient(self); win.focus_force()
             self.set_icon(win)
-            
-            # [FIX 2] Force Icon again after 200ms (Fixes "Missing Icon" on Windows Popups)
-            win.after(200, lambda: self.set_icon(win))
-            
-            # Center Window Logic
-            self.update_idletasks()
-            w = 400
-            h = 480
-            x = self.winfo_x() + (self.winfo_width() // 2) - (w // 2)
-            y = self.winfo_y() + (self.winfo_height() // 2) - (h // 2)
-            win.geometry(f"{w}x{h}+{x}+{y}")
-            
-            win.transient(self)
-            win.focus_force()
-
-            # Content
-            lbl_img = ctk.CTkLabel(win, image=qr_ctk_img, text="")
-            lbl_img.pack(padx=20, pady=(30, 20))
-            
+            ctk.CTkLabel(win, image=img, text="").pack(padx=20, pady=(30, 20))
             ctk.CTkLabel(win, text="Scan to Control on Mobile", font=("Arial", 16, "bold")).pack(pady=(0,5))
-            
-            link = ctk.CTkLabel(win, text=url, text_color="gray", cursor="hand2", font=("Consolas", 14, "underline"))
-            link.pack(pady=(0,20))
-            link.bind("<Button-1>", lambda e: webbrowser.open(url))
-            
+            l=ctk.CTkLabel(win, text=url, text_color="gray", cursor="hand2", font=("Consolas", 14, "underline")); l.pack(pady=(0,20)); l.bind("<Button-1>", lambda e: webbrowser.open(url))
             ctk.CTkButton(win, text="Close", command=win.destroy, fg_color="gray").pack(pady=10)
-            
-        except Exception as e:
-            messagebox.showerror("QR Error", f"Failed to show QR Code:\n{e}")
+        except Exception as e: messagebox.showerror("QR Error", str(e))
 
     # --- UPDATER ---
     def run_update_check(self):
         h, n = UpdateManager.check_for_updates(VERSION, UPDATE_API_URL)
         if h: self.after(0, lambda: self.btn_update.configure(text=f"⬇ Get {n}") or self.btn_update.pack(side="bottom", padx=10, pady=(0, 10)))
 
-    # [REPLACE] existing _connection_monitor with this throttled version:
-
+    # --- CONNECTION MONITOR ---
     def _connection_monitor(self):
         while self.monitoring:
-            # OPTIMIZATION: Pause monitoring if we aren't in the Provisioner tab
-            try:
-                if not self.frames["prov"].winfo_ismapped():
-                    time.sleep(2)
-                    continue
-            except: pass
-
-            if self.manual_override_active: time.sleep(5); continue
+            if self.manual_override_active: time.sleep(3); continue
             found = False
             for ip in ["10.22.22.1", "192.168.49.1"]:
                 for p in [49153, 49152, 49154]:
@@ -1082,14 +1073,15 @@ class WemoOpsApp(ctk.CTk):
     def force_unlock(self):
         self.status_frame.configure(fg_color=("#fcf3cf", "#332200"), border_color="#FFA500"); self.status_lbl_icon.configure(text="(!)"); self.status_lbl_text.configure(text="MANUAL OVERRIDE", text_color="#FFA500"); self.status_lbl_sub.configure(text="Forced Unlock. Assuming 10.22.22.1.", text_color=COLOR_TEXT); self.prov_btn.configure(state="normal", text="Push Configuration (Forced)"); self.current_setup_ip="10.22.22.1"; self.manual_override_active=True
 
-    def apply_profile(self, c):
-        if c in self.profiles: self.ssid_entry.delete(0, "end"); self.ssid_entry.insert(0, c); self.pass_entry.delete(0, "end"); self.pass_entry.insert(0, self.profiles[c])
-    def save_current_profile(self):
-        s, p = self.ssid_entry.get(), self.pass_entry.get()
-        if s and p: self.profiles[s]=p; self.save_json(PROFILE_FILE, self.profiles); self.profile_combo.configure(values=["Select Saved Profile..."]+list(self.profiles.keys())); self.profile_combo.set(s)
-    def delete_profile(self):
-        c = self.profile_combo.get()
-        if c in self.profiles: del self.profiles[c]; self.save_json(PROFILE_FILE, self.profiles); self.profile_combo.configure(values=["Select Saved Profile..."]+list(self.profiles.keys())); self.profile_combo.set("Select Saved Profile...")
+    # --- SERVER CONTROL ---
+    def start_local_server(self):
+        cmd = [SERVICE_EXE_PATH] if SERVICE_EXE_PATH and os.path.exists(SERVICE_EXE_PATH) else [sys.executable, "wemo_server.py"]
+        try:
+            startupinfo = subprocess.STARTUPINFO() if sys.platform == "win32" else None
+            if startupinfo: startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            subprocess.Popen(cmd, startupinfo=startupinfo)
+            self.svc_status.configure(text="Starting...", text_color="orange")
+        except Exception as e: messagebox.showerror("Error", str(e))
 
 if __name__ == "__main__":
     app = WemoOpsApp()
