@@ -60,29 +60,54 @@ async function updateDashboard() {
         .forEach((d) => {
           sel.add(new Option(d.name, d.name));
           let div = document.createElement("div");
-          div.className = "card flex";
+          div.className = "card";
           div.id = "card-" + d.name.replace(/\s+/g, "-");
+          
+          let dimmerControls = "";
+          if (d.type === "dimmer") {
+              dimmerControls = `
+                <div style="margin-top:15px; display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:0.8rem;">💡</span>
+                    <input type="range" min="0" max="100" value="${d.state}" 
+                           class="slider"
+                           onchange="setBrightness('${d.name}', this.value)"
+                           oninput="document.getElementById('lbl-${d.name.replace(/\s+/g, "-")}').innerText = this.value + '%'">
+                    <span id="lbl-${d.name.replace(/\s+/g, "-")}" style="font-size:0.8rem; width:35px; text-align:right;">${d.state}%</span>
+                </div>
+              `;
+          }
+
           div.innerHTML = `
-                            <div>
-                                <div style="font-weight:bold; font-size:1.1rem;">${d.name}</div>
-                                <div style="font-size:0.8rem; color:var(--subtext);">${d.ip}</div>
-                            </div>
-                            <button id="btn-${d.name.replace(/\s+/g, "-")}" class="btn btn-toggle ${d.state ? "on" : ""}" onclick="toggle('${d.name}')">
-                                ${d.state ? "ON" : "OFF"}
-                            </button>`;
+                <div class="flex">
+                    <div>
+                        <div style="font-weight:bold; font-size:1.1rem;">${d.name}</div>
+                        <div style="font-size:0.8rem; color:var(--subtext);">${d.ip}</div>
+                    </div>
+                    <button id="btn-${d.name.replace(/\s+/g, "-")}" class="btn btn-toggle ${d.state > 0 ? "on" : ""}" onclick="toggle('${d.name}')">
+                        ${d.state > 0 ? "ON" : "OFF"}
+                    </button>
+                </div>
+                ${dimmerControls}
+          `;
           list.appendChild(div);
         });
     } else {
+      // Diff Update
       data.forEach((d) => {
-        const btn = document.getElementById(
-          "btn-" + d.name.replace(/\s+/g, "-"),
-        );
+        const btn = document.getElementById("btn-" + d.name.replace(/\s+/g, "-"));
         if (btn) {
-          const isOn = d.state === 1 || d.state === true;
+          const isOn = d.state > 0;
           if (btn.classList.contains("on") !== isOn) {
             btn.className = `btn btn-toggle ${isOn ? "on" : ""}`;
             btn.innerText = isOn ? "ON" : "OFF";
           }
+        }
+        // Update slider value if it exists and user isn't currently dragging it (hard to detect, so standard sync)
+        if (d.type === "dimmer") {
+             const lbl = document.getElementById("lbl-" + d.name.replace(/\s+/g, "-"));
+             if (lbl && !document.activeElement.type === "range") {
+                 lbl.innerText = d.state + "%";
+             }
         }
       });
     }
@@ -101,6 +126,11 @@ async function toggle(n) {
   }
   await API.post("toggle/" + n);
   setTimeout(updateDashboard, 500);
+}
+
+// [NEW] Brightness Function
+async function setBrightness(name, val) {
+    await API.post("brightness/" + name, { level: val });
 }
 
 // --- SCHEDULE LOGIC ---
@@ -176,12 +206,11 @@ async function saveSubnet() {
   const val = document.getElementById("subnet-input").value.trim();
   if (!val) return;
 
-  // Add if unique
   if (!currentSettings.subnets.includes(val)) {
     currentSettings.subnets.push(val);
     await API.post("settings", { subnets: currentSettings.subnets });
     renderSubnetList();
-    document.getElementById("subnet-select").value = val; // Select it
+    document.getElementById("subnet-select").value = val;
     alert("Subnet Saved");
   } else {
     alert("Subnet already in list");
@@ -214,15 +243,11 @@ function triggerScan() {
 async function poller() {
   const s = await API.get("status");
   document.getElementById("scan-status").innerText = s.scan_status;
-
   await updateDashboard();
   await updateSchedules();
 }
 
-// Init
 loadSettings();
 updateDashboard();
 updateSchedules();
-
-// Fast Polling for Responsive UI
 setInterval(poller, 2000);
