@@ -27,9 +27,11 @@ except ImportError:
     HAS_QR = False
 
 # --- CONFIGURATION ---
-VERSION = "v5.2.4-1"
+VERSION = "v5.2.4-Stable"
 SERVER_PORT = 5050
+HOOBS_PORT = 8581
 SERVER_URL = f"http://localhost:{SERVER_PORT}"
+HOOBS_URL = f"http://localhost:{HOOBS_PORT}"
 UPDATE_API_URL = "https://api.github.com/repos/qrussell/wemo-ops-center/releases/latest"
 UPDATE_PAGE_URL = "https://github.com/qrussell/wemo-ops-center/releases"
 
@@ -52,21 +54,28 @@ SETTINGS_FILE = os.path.join(APP_DATA_DIR, "settings.json")
 # --- SERVICE & INSTALLER DETECTION ---
 BASE_DIR = os.path.dirname(os.path.abspath(sys.argv[0]))
 
-if sys.platform == "win32":
-    SERVICE_EXE_PATH = os.path.join(APP_DATA_DIR, "wemo_service.exe")
+# [FIX] Prioritize finding the service in the same folder as the app (Installer location)
+SERVICE_EXE_PATH = None
+local_service = os.path.join(BASE_DIR, "wemo_service.exe")
+
+if os.path.exists(local_service):
+    SERVICE_EXE_PATH = local_service
+elif sys.platform == "win32":
+    # Fallback to AppData
+    appdata_service = os.path.join(APP_DATA_DIR, "wemo_service.exe")
+    if os.path.exists(appdata_service):
+        SERVICE_EXE_PATH = appdata_service
 else:
+    # Linux/Mac paths
     possible_paths = [
         os.path.join(APP_DATA_DIR, "wemo_service"),
         "/opt/WemoOps/wemo_service",
         "/usr/bin/wemo_service"
     ]
-    SERVICE_EXE_PATH = None
     for p in possible_paths:
         if os.path.exists(p):
             SERVICE_EXE_PATH = p
             break
-    if not SERVICE_EXE_PATH:
-        SERVICE_EXE_PATH = os.path.join(APP_DATA_DIR, "wemo_service")
 
 if getattr(sys, 'frozen', False):
     os.environ['PATH'] += os.pathsep + sys._MEIPASS
@@ -92,6 +101,23 @@ FONT_H1 = ("Roboto", 24, "bold")
 FONT_H2 = ("Roboto", 18, "bold")
 FONT_BODY = ("Roboto", 14)
 FONT_MONO = ("Consolas", 13)
+
+# ==============================================================================
+#  UPDATE MANAGER
+# ==============================================================================
+class UpdateManager:
+    @staticmethod
+    def check_for_updates(current_version, api_url):
+        try:
+            response = requests.get(api_url, timeout=3)
+            if response.status_code == 200:
+                data = response.json()
+                latest_tag = data.get("tag_name", "").strip()
+                if latest_tag and latest_tag != current_version:
+                    return True, latest_tag
+        except:
+            pass
+        return False, None
 
 # ==============================================================================
 #  API CLIENT
@@ -175,6 +201,17 @@ class NetworkUtils:
         except: pass
         return [ssid for ssid in list(set(wemos)) if "wemo" in ssid.lower() or "belkin" in ssid.lower()]
 
+    @staticmethod
+    def check_hoobs_status():
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(0.5)
+            result = s.connect_ex(('localhost', HOOBS_PORT))
+            s.close()
+            return result == 0
+        except:
+            return False
+
 class DeepScanner:
     def probe_port(self, ip, ports=[49152, 49153, 49154, 49155], timeout=0.6):
         for port in ports:
@@ -218,7 +255,7 @@ class DeepScanner:
         return found_devices
 
 # ==============================================================================
-#  WIFI AUTOMATOR (Smart Connect)
+#  WIFI AUTOMATOR
 # ==============================================================================
 class WifiAutomator:
     @staticmethod
@@ -298,6 +335,7 @@ class WemoOpsApp(ctk.CTk):
         self.current_setup_ip = None
         self.current_setup_port = None
         self.manual_override_active = False
+        self.hoobs_online = False
 
         if "lat" in self.settings:
             self.solar.lat = self.settings["lat"]
@@ -366,16 +404,20 @@ class WemoOpsApp(ctk.CTk):
         threading.Thread(target=self._scheduler_engine, daemon=True).start()
         threading.Thread(target=self.run_update_check, daemon=True).start()
         threading.Thread(target=self._state_poller, daemon=True).start()
+        threading.Thread(target=self._hoobs_monitor, daemon=True).start()
         
         self.server_heartbeat()
 
-    # --- HELPERS ---
+    # --- HELPERS (FIXED SYNTAX) ---
     def load_json(self, p, t): 
         if os.path.exists(p): 
             try: 
-                with open(p) as f: return json.load(f)
-            except: pass
+                with open(p) as f: 
+                    return json.load(f)
+            except: 
+                pass
         return t()
+        
     def save_json(self, p, d):
         with open(p, 'w') as f: json.dump(d, f)
     def set_ui_scale(self, s):
@@ -425,32 +467,72 @@ class WemoOpsApp(ctk.CTk):
     # --- INTEGRATIONS (HOOBS) ---
     def create_bridges_ui(self):
         f = ctk.CTkFrame(self.content, fg_color="transparent"); self.frames["bridge"] = f
-        ctk.CTkLabel(f, text="HOOBS & Homebridge Integration", font=FONT_H1, text_color=COLOR_TEXT).pack(pady=20)
         
+        h_frame = ctk.CTkFrame(f, fg_color="transparent")
+        h_frame.pack(fill="x", pady=20)
+        ctk.CTkLabel(h_frame, text="HOOBS & Homebridge Integration", font=FONT_H1, text_color=COLOR_TEXT).pack(side="left")
+        self.hoobs_status_lbl = ctk.CTkLabel(h_frame, text="Checking...", font=("Arial", 12, "bold"), text_color="gray")
+        self.hoobs_status_lbl.pack(side="right", padx=10)
+
         c = ctk.CTkFrame(f, fg_color=COLOR_CARD)
         c.pack(fill="both", expand=True, padx=20, pady=10)
         
-        # --- Config Generator ---
         ctk.CTkLabel(c, text="1. Configuration Generator", font=FONT_H2, text_color=COLOR_TEXT).pack(pady=(20, 5), anchor="w", padx=20)
-        ctk.CTkLabel(c, text="Generates the 'config.json' block for the 'homebridge-platform-wemo' plugin.", 
+        ctk.CTkLabel(c, text="Use this JSON block in your Homebridge/HOOBS 'config.json' file.", 
                      font=FONT_BODY, text_color=COLOR_SUBTEXT).pack(pady=0, anchor="w", padx=20)
         
         ctk.CTkButton(c, text="Scan & Generate Config", height=30,
                       fg_color=COLOR_ACCENT, command=self.generate_hoobs_config).pack(pady=10, padx=20, anchor="w")
         
-        self.hoobs_text = ctk.CTkTextbox(c, font=FONT_MONO, height=150)
+        self.hoobs_text = ctk.CTkTextbox(c, font=FONT_MONO, height=120)
         self.hoobs_text.pack(fill="x", padx=20, pady=5)
         
         ctk.CTkButton(c, text="Copy Config", fg_color=COLOR_BTN_SECONDARY, text_color=COLOR_BTN_TEXT, width=100,
                       command=lambda: pyperclip.copy(self.hoobs_text.get("1.0", "end"))).pack(pady=5, padx=20, anchor="e")
 
-        # --- Installer Section ---
-        ctk.CTkLabel(c, text="2. Software Installation", font=FONT_H2, text_color=COLOR_TEXT).pack(pady=(20, 5), anchor="w", padx=20)
-        ctk.CTkLabel(c, text="Automatically install Homebridge, the Dashboard, and Wemo Plugins on this computer.", 
-                     font=FONT_BODY, text_color=COLOR_SUBTEXT).pack(pady=0, anchor="w", padx=20)
+        self.install_frame = ctk.CTkFrame(c, fg_color="transparent")
+        self.install_frame.pack(fill="x", padx=20, pady=20)
         
-        self.btn_install_hoobs = ctk.CTkButton(c, text="Install Compatibility Layer", height=40, fg_color=COLOR_SUCCESS, command=self.run_hoobs_installer)
-        self.btn_install_hoobs.pack(pady=20, padx=20, fill="x")
+        self.lbl_install_header = ctk.CTkLabel(self.install_frame, text="2. Software Installation", font=FONT_H2, text_color=COLOR_TEXT, anchor="w")
+        self.lbl_install_desc = ctk.CTkLabel(self.install_frame, text="Homebridge is not running. Install the compatibility layer to enable Alexa/Google Home.", font=FONT_BODY, text_color=COLOR_SUBTEXT, anchor="w")
+        self.btn_install_hoobs = ctk.CTkButton(self.install_frame, text="Install Compatibility Layer", height=40, fg_color=COLOR_SUCCESS, command=self.run_hoobs_installer)
+        
+        self.lbl_connect_header = ctk.CTkLabel(self.install_frame, text="2. Connection & Setup", font=FONT_H2, text_color=COLOR_TEXT, anchor="w")
+        self.lbl_connect_desc = ctk.CTkLabel(self.install_frame, text="Homebridge is running! Follow these steps to finish setup:", font=FONT_BODY, text_color=COLOR_SUBTEXT, anchor="w")
+        self.connect_steps = ctk.CTkTextbox(self.install_frame, height=120, font=FONT_BODY, fg_color=COLOR_BG)
+        self.connect_steps.insert("1.0", "1. Click 'Launch Dashboard' below.\n2. Login with admin / admin.\n3. Go to Plugins -> Search 'homebridge-platform-wemo' -> Install.\n4. Go to Config -> Paste the JSON from above into 'platforms'.\n5. Restart Homebridge (Top Right Icon).")
+        self.connect_steps.configure(state="disabled")
+        self.btn_open_hoobs = ctk.CTkButton(self.install_frame, text="Launch Dashboard (localhost:8581)", height=40, fg_color=COLOR_ACCENT, command=lambda: webbrowser.open(HOOBS_URL))
+
+        self._update_hoobs_ui(False)
+
+    def _hoobs_monitor(self):
+        while self.monitoring:
+            is_running = NetworkUtils.check_hoobs_status()
+            self.hoobs_online = is_running
+            self.after(0, lambda: self._update_status_label(is_running))
+            self.after(0, lambda: self._update_hoobs_ui(is_running))
+            time.sleep(5)
+
+    def _update_status_label(self, is_running):
+        if is_running:
+            self.hoobs_status_lbl.configure(text="✅ SERVICE ONLINE", text_color=COLOR_SUCCESS)
+        else:
+            self.hoobs_status_lbl.configure(text="⚠️ SERVICE OFFLINE", text_color="orange")
+
+    def _update_hoobs_ui(self, is_running):
+        for widget in self.install_frame.winfo_children():
+            widget.pack_forget()
+
+        if is_running:
+            self.lbl_connect_header.pack(fill="x", pady=(0,5))
+            self.lbl_connect_desc.pack(fill="x", pady=(0,10))
+            self.connect_steps.pack(fill="x", pady=(0,10))
+            self.btn_open_hoobs.pack(fill="x")
+        else:
+            self.lbl_install_header.pack(fill="x", pady=(0,5))
+            self.lbl_install_desc.pack(fill="x", pady=(0,10))
+            self.btn_install_hoobs.pack(fill="x")
 
     def generate_hoobs_config(self):
         devices = []
@@ -477,10 +559,8 @@ class WemoOpsApp(ctk.CTk):
         self.hoobs_text.insert("1.0", json_str)
 
     def run_hoobs_installer(self):
-        # Locate the installer
         target = None
-        # Check for EXE first (bundled)
-        exe_path = os.path.join(os.path.dirname(sys.executable), "Wemo_HOOBS_Integration_Setup.exe")
+        exe_path = os.path.join(BASE_DIR, "Wemo_HOOBS_Integration_Setup.exe")
         if not os.path.exists(exe_path):
             exe_path = "Wemo_HOOBS_Integration_Setup.exe" # Current dir
         
@@ -496,7 +576,6 @@ class WemoOpsApp(ctk.CTk):
             messagebox.showerror("Missing Component", "Could not find 'hoobs_installer.py' or 'Wemo_HOOBS_Integration_Setup.exe' in the application directory.")
             return
 
-        # Execute with Elevation
         try:
             if sys.platform == "win32":
                 import ctypes
@@ -505,7 +584,6 @@ class WemoOpsApp(ctk.CTk):
                 else:
                     ctypes.windll.shell32.ShellExecuteW(None, "runas", target, "", None, 1)
             else:
-                # Linux/Mac
                 if is_script:
                     cmd = f"sudo python3 {target}"
                     try:
@@ -765,19 +843,67 @@ class WemoOpsApp(ctk.CTk):
             self.profile_combo.configure(values=["Select Saved Profile..."] + list(self.profiles.keys()))
             self.profile_combo.set("Select Saved Profile...")
 
+    # --- CONNECTION MONITOR ---
+    def _connection_monitor(self):
+        while self.monitoring:
+            if self.manual_override_active: 
+                time.sleep(3)
+                continue
+            found = False
+            for ip in ["10.22.22.1", "192.168.49.1"]:
+                for p in [49153, 49152, 49154]:
+                    try: 
+                        d = pywemo.discovery.device_from_description(f"http://{ip}:{p}/setup.xml")
+                        if d: 
+                            self.current_setup_ip = ip
+                            self.current_setup_port = p
+                            self.after(0, lambda: self.set_status_connected(d, ip, p))
+                            found = True
+                            break
+                    except: pass
+                if found: break
+            
+            if not found: 
+                self.current_setup_ip = None
+                self.after(0, self.set_status_disconnected)
+            time.sleep(5)
+
+    def set_status_connected(self, d, i, p):
+        self.status_frame.configure(fg_color=("#d0f0c0", "#1a331a"), border_color="#28a745")
+        self.status_lbl_icon.configure(text="OK")
+        self.status_lbl_text.configure(text="CONNECTED", text_color="#28a745")
+        self.status_lbl_sub.configure(text=f"Found: {d.name} ({i}:{p})", text_color=COLOR_TEXT)
+        self.prov_btn.configure(state="normal", text="Push Configuration")
+        self.override_link.pack_forget()
+
+    def set_status_disconnected(self):
+        self.status_frame.configure(fg_color=("#fadbd8", "#331111"), border_color="#ff5555")
+        self.status_lbl_icon.configure(text="X")
+        self.status_lbl_text.configure(text="NOT CONNECTED", text_color="#ff5555")
+        self.status_lbl_sub.configure(text="Connect Wi-Fi to 'Wemo.Mini.XXX'", font=("Arial", 12), text_color=COLOR_TEXT)
+        self.prov_btn.configure(state="disabled", text="Waiting for Connection...")
+        self.override_link.pack(anchor="e", pady=(0, 5))
+
+    def force_unlock(self):
+        self.status_frame.configure(fg_color=("#fcf3cf", "#332200"), border_color="#FFA500")
+        self.status_lbl_icon.configure(text="(!)")
+        self.status_lbl_text.configure(text="MANUAL OVERRIDE", text_color="#FFA500")
+        self.status_lbl_sub.configure(text="Forced Unlock. Assuming 10.22.22.1.", text_color=COLOR_TEXT)
+        self.prov_btn.configure(state="normal", text="Push Configuration (Forced)")
+        self.current_setup_ip = "10.22.22.1"
+        self.manual_override_active = True
+
     # --- AUTOMATION / SCHEDULER ---
     def create_schedule_ui(self):
         frame = ctk.CTkFrame(self.content, fg_color="transparent")
         self.frames["sched"] = frame
         
-        # Header with Mode Indicator
         head = ctk.CTkFrame(frame, fg_color="transparent")
         head.pack(fill="x", pady=20)
         ctk.CTkLabel(head, text="Automation Scheduler", font=FONT_H1, text_color=COLOR_TEXT).pack(side="left")
         self.sched_mode_lbl = ctk.CTkLabel(head, text="MODE: CHECKING...", font=("Arial", 12, "bold"), text_color="gray")
         self.sched_mode_lbl.pack(side="right", padx=10)
         
-        # Location / Solar Panel
         loc_frame = ctk.CTkFrame(frame, fg_color=COLOR_FRAME)
         loc_frame.pack(fill="x", pady=(0, 10))
         ctk.CTkLabel(loc_frame, text="Solar Location:", font=FONT_H2, text_color=COLOR_TEXT).pack(side="left", padx=10)
@@ -785,7 +911,6 @@ class WemoOpsApp(ctk.CTk):
         self.loc_lbl.pack(side="left")
         ctk.CTkButton(loc_frame, text="Update Solar Data", width=120, fg_color=COLOR_BTN_SECONDARY, text_color=COLOR_BTN_TEXT, command=self.update_solar_data).pack(side="right", padx=10, pady=5)
         
-        # Creator Panel
         creator_frame = ctk.CTkFrame(frame)
         creator_frame.pack(fill="x", pady=10)
         
@@ -855,7 +980,6 @@ class WemoOpsApp(ctk.CTk):
             self.sched_dev_combo.set(names[0])
 
     def add_job(self):
-        # [SAFETY] Reload latest data from disk before modifying
         if os.path.exists(SCHEDULE_FILE):
             self.schedules = self.load_json(SCHEDULE_FILE, list)
 
@@ -905,9 +1029,7 @@ class WemoOpsApp(ctk.CTk):
             ctk.CTkButton(row, text="Del", width=40, fg_color=COLOR_DANGER, command=lambda j=job: self.delete_job(j["id"])).pack(side="right", padx=5)
 
     def delete_job(self, jid):
-        # Try server delete
         self.api.delete_schedule(jid)
-        # Always clean local cache too
         self.schedules = [j for j in self.schedules if j["id"] != jid]
         self.save_json(SCHEDULE_FILE, self.schedules)
         self.render_jobs()
@@ -1050,28 +1172,6 @@ class WemoOpsApp(ctk.CTk):
     def run_update_check(self):
         h, n = UpdateManager.check_for_updates(VERSION, UPDATE_API_URL)
         if h: self.after(0, lambda: self.btn_update.configure(text=f"⬇ Get {n}") or self.btn_update.pack(side="bottom", padx=10, pady=(0, 10)))
-
-    # --- CONNECTION MONITOR ---
-    def _connection_monitor(self):
-        while self.monitoring:
-            if self.manual_override_active: time.sleep(3); continue
-            found = False
-            for ip in ["10.22.22.1", "192.168.49.1"]:
-                for p in [49153, 49152, 49154]:
-                    try: 
-                        d = pywemo.discovery.device_from_description(f"http://{ip}:{p}/setup.xml")
-                        if d: self.current_setup_ip=ip; self.current_setup_port=p; self.after(0, lambda: self.set_status_connected(d, ip, p)); found=True; break
-                    except: pass
-                if found: break
-            if not found: self.current_setup_ip=None; self.after(0, self.set_status_disconnected)
-            time.sleep(5)
-
-    def set_status_connected(self, d, i, p):
-        self.status_frame.configure(fg_color=("#d0f0c0", "#1a331a"), border_color="#28a745"); self.status_lbl_icon.configure(text="OK"); self.status_lbl_text.configure(text="CONNECTED", text_color="#28a745"); self.status_lbl_sub.configure(text=f"Found: {d.name} ({i}:{p})", text_color=COLOR_TEXT); self.prov_btn.configure(state="normal", text="Push Configuration"); self.override_link.pack_forget()
-    def set_status_disconnected(self):
-        self.status_frame.configure(fg_color=("#fadbd8", "#331111"), border_color="#ff5555"); self.status_lbl_icon.configure(text="X"); self.status_lbl_text.configure(text="NOT CONNECTED", text_color="#ff5555"); self.status_lbl_sub.configure(text="Connect Wi-Fi to 'Wemo.Mini.XXX'", font=("Arial", 12), text_color=COLOR_TEXT); self.prov_btn.configure(state="disabled", text="Waiting for Connection..."); self.override_link.pack(anchor="e", pady=(0, 5))
-    def force_unlock(self):
-        self.status_frame.configure(fg_color=("#fcf3cf", "#332200"), border_color="#FFA500"); self.status_lbl_icon.configure(text="(!)"); self.status_lbl_text.configure(text="MANUAL OVERRIDE", text_color="#FFA500"); self.status_lbl_sub.configure(text="Forced Unlock. Assuming 10.22.22.1.", text_color=COLOR_TEXT); self.prov_btn.configure(state="normal", text="Push Configuration (Forced)"); self.current_setup_ip="10.22.22.1"; self.manual_override_active=True
 
     # --- SERVER CONTROL ---
     def start_local_server(self):
