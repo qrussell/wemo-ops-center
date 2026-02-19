@@ -4,7 +4,7 @@ from pywemo.ouimeaux_device.dimmer import Dimmer
 import threading
 import sys
 import os
-import shutil  # <-- FIXED: Added missing import for Linux terminal detection
+import shutil
 import time
 import json
 import requests
@@ -360,7 +360,7 @@ class WemoOpsApp(ctk.CTk):
         self.btn_sched = self.create_nav_btn("Automation", "sched")
         self.btn_maint = self.create_nav_btn("Maintenance", "maint")
         self.btn_bridge = self.create_nav_btn("Integrations", "bridge")
-        self.btn_settings = self.create_nav_btn("Settings", "settings") # <-- MOVED HERE
+        self.btn_settings = self.create_nav_btn("Settings", "settings") 
         
         ctk.CTkFrame(self.sidebar, fg_color="transparent").pack(expand=True)
         
@@ -1041,9 +1041,14 @@ class WemoOpsApp(ctk.CTk):
         f = ctk.CTkFrame(self.content, fg_color="transparent"); self.frames["settings"] = f
         ctk.CTkLabel(f, text="Application Settings", font=FONT_H1, text_color=COLOR_TEXT).pack(pady=(0, 20), anchor="w")
         c = ctk.CTkFrame(f, fg_color=COLOR_CARD); c.pack(fill="x", pady=10, padx=5)
+        
+        # [NEW] Added explicit labels for the settings
         r1 = ctk.CTkFrame(c, fg_color="transparent"); r1.pack(fill="x", padx=20, pady=10)
+        ctk.CTkLabel(r1, text="Appearance Mode:", font=FONT_BODY, text_color=COLOR_TEXT).pack(side="left")
         ctk.CTkComboBox(r1, values=["System", "Light", "Dark"], command=self.change_theme, variable=ctk.StringVar(value=self.settings.get("theme", "System")), width=150).pack(side="right")
+        
         r2 = ctk.CTkFrame(c, fg_color="transparent"); r2.pack(fill="x", padx=20, pady=10)
+        ctk.CTkLabel(r2, text="UI Scaling:", font=FONT_BODY, text_color=COLOR_TEXT).pack(side="left")
         ctk.CTkComboBox(r2, values=["80%", "90%", "100%", "110%", "120%", "150%"], command=self.change_scaling, variable=ctk.StringVar(value=self.settings.get("scale", "100%")), width=150).pack(side="right")
 
     def change_theme(self, m): ctk.set_appearance_mode(m); self.settings["theme"]=m; self.save_json(SETTINGS_FILE, self.settings)
