@@ -2,13 +2,13 @@
 
 # ==============================================================================
 #  WEMO OPS - MASTER BUILDER (Port 5050 Edition)
-#  Version: 5.2.3-Stable
+#  Version: 5.3.0-MacFix
 # ==============================================================================
 
 set -e
 
 APP_NAME="WemoOps"
-VERSION="5.2.3-2"
+VERSION="5.3.0-1"
 CLIENT_SCRIPT="wemo_ops_universal.py"
 SERVER_SCRIPT="wemo_server.py"
 
@@ -80,8 +80,12 @@ pyinstaller --noconfirm --noconsole --onefile --clean \
 
 deactivate
 
-# 5. PACKAGE
-echo "[3/5] Packaging DMG..."
+# 5. BUNDLE
+echo "[3/5] Bundling Executables..."
+cp "dist/wemo_service" "dist/$APP_NAME.app/Contents/MacOS/"
+
+# 6. PACKAGE
+echo "[4/5] Packaging DMG..."
 STAGING="dist/dmg_staging"
 mkdir -p "$STAGING/Service_Binary"
 
@@ -148,8 +152,8 @@ EOF
 
 chmod +x "$STAGING/Install_WemoOps.command"
 
-# 6. GENERATE DMG
-echo "[4/5] Generating DMG..."
+# 7. GENERATE DMG
+echo "[5/5] Generating DMG..."
 DMG_NAME="${APP_NAME}_${VERSION}_universal.dmg"
 rm -f "dist/$DMG_NAME"
 hdiutil create -volname "$APP_NAME Installer" -srcfolder "$STAGING" -ov -format UDZO "dist/$DMG_NAME" >/dev/null

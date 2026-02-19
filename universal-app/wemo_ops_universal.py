@@ -19,16 +19,18 @@ import platform
 from tkinter import messagebox
 import pyperclip
 
-# --- QR Code & Image Support ---
+# --- QR Code & Image Support (CRASH FIX) ---
+HAS_QR = False
 try:
     import qrcode
     from PIL import Image, ImageTk 
     HAS_QR = True
-except ImportError:
+except Exception as e:
+    print(f"QR Support Disabled: {e}")
     HAS_QR = False
 
 # --- CONFIGURATION ---
-VERSION = "v5.3.0-Stable"
+VERSION = "v5.3.0"
 SERVER_PORT = 5050
 HOOBS_PORT = 8581
 SERVER_URL = f"http://localhost:{SERVER_PORT}"
@@ -57,9 +59,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(sys.argv[0]))
 
 SERVICE_EXE_PATH = None
 local_service = os.path.join(BASE_DIR, "wemo_service.exe")
+mac_service = os.path.join(BASE_DIR, "wemo_service")
 
 if os.path.exists(local_service):
     SERVICE_EXE_PATH = local_service
+elif os.path.exists(mac_service):
+    SERVICE_EXE_PATH = mac_service
 elif sys.platform == "win32":
     appdata_service = os.path.join(APP_DATA_DIR, "wemo_service.exe")
     if os.path.exists(appdata_service):
@@ -313,15 +318,8 @@ class WemoOpsApp(ctk.CTk):
         super().__init__()
         self.title(f"Wemo Ops Center {VERSION}")
         self.geometry("1100x800")
-        try:
-            if getattr(sys, 'frozen', False):
-                base_path = os.path.join(sys._MEIPASS, "images")
-            else:
-                base_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images")
-            icon_path = os.path.join(base_path, "app_icon.ico")
-            if os.path.exists(icon_path):
-                self.iconbitmap(icon_path)
-        except: pass
+        
+        self.set_icon(self)
 
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
@@ -454,51 +452,40 @@ class WemoOpsApp(ctk.CTk):
         except: pass
         self.after(5000, self.server_heartbeat)
 
-    def set_icon(self, window):
+    def set_icon(self, window=None):
+        target = window if window else self
         try:
             if getattr(sys, 'frozen', False):
                 base_path = os.path.join(sys._MEIPASS, "images")
             else:
                 base_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images")
             icon_path = os.path.join(base_path, "app_icon.ico")
-            if os.path.exists(icon_path):
-                window.iconbitmap(icon_path)
+            if os.path.exists(icon_path) and sys.platform == "win32":
+                target.iconbitmap(icon_path)
         except Exception: pass
 
-    # --- DASHBOARD (5.3.0 Fixed UI) ---
+    # --- DASHBOARD ---
     def create_dashboard(self):
         f = ctk.CTkFrame(self.content, fg_color="transparent"); self.frames["dash"] = f
-        
-        # Header Container
         head = ctk.CTkFrame(f, fg_color="transparent"); head.pack(fill="x", pady=(0, 20))
-        
-        # Title Left
         ctk.CTkLabel(head, text="Network Overview (Local)", font=FONT_H1, text_color=COLOR_TEXT).pack(side="left", anchor="n")
         
-        # Controls Right (Container)
         ctrl = ctk.CTkFrame(head, fg_color="transparent"); ctrl.pack(side="right", anchor="e")
-        
-        # Row 1: Subnet Controls + Scan Button
         r1 = ctk.CTkFrame(ctrl, fg_color="transparent"); r1.pack(side="top", anchor="e")
         
         self.subnet_combo = ctk.CTkComboBox(r1, width=180, values=self.saved_subnets)
         self.subnet_combo.pack(side="left", padx=2)
         self.subnet_combo.set(NetworkUtils.get_subnet_cidr())
         
-        # [NEW] Subnet Management Buttons
         ctk.CTkButton(r1, text="Save", width=50, fg_color=COLOR_ACCENT, command=self.save_subnet).pack(side="left", padx=2)
         ctk.CTkButton(r1, text="Del", width=50, fg_color=COLOR_DANGER, command=self.delete_subnet).pack(side="left", padx=(2, 10))
-        
-        # Scan Button
         ctk.CTkButton(r1, text="Scan", width=80, command=self.run_local_scan, fg_color=COLOR_ACCENT).pack(side="left", padx=5)
         
-        # Row 2: Status Label (Underneath buttons)
         self.scan_status = ctk.CTkLabel(ctrl, text="Ready", text_color="orange", font=("Arial", 11))
         self.scan_status.pack(side="top", anchor="e", padx=10, pady=(2, 0))
         
         self.dev_list = ctk.CTkScrollableFrame(f, label_text="Devices", label_text_color=COLOR_TEXT); self.dev_list.pack(fill="both", expand=True)
 
-    # [NEW] Subnet Management Logic
     def save_subnet(self):
         s = self.subnet_combo.get().strip()
         if s and s not in self.saved_subnets:
@@ -655,24 +642,48 @@ class WemoOpsApp(ctk.CTk):
         self.install_frame = ctk.CTkFrame(c, fg_color="transparent"); self.install_frame.pack(fill="x", padx=20, pady=20)
         
         self.lbl_install_header = ctk.CTkLabel(self.install_frame, text="2. Software Installation", font=FONT_H2, text_color=COLOR_TEXT, anchor="w")
-        self.lbl_install_desc = ctk.CTkLabel(self.install_frame, text="Homebridge is not running. Install the compatibility layer to enable Alexa/Google Home.", font=FONT_BODY, text_color=COLOR_SUBTEXT, anchor="w")
-        self.btn_install_hoobs = ctk.CTkButton(self.install_frame, text="Install Compatibility Layer", height=40, fg_color=COLOR_SUCCESS, command=self.run_hoobs_installer)
         
+        # --- OS SPECIFIC INSTALLER UI ---
+        if sys.platform == "darwin":
+            # Mac UI (Manual Instructions)
+            self.lbl_mac_install_desc = ctk.CTkLabel(self.install_frame, text="Homebridge is not running. macOS requires manual installation via Terminal.", font=FONT_BODY, text_color=COLOR_SUBTEXT, anchor="w")
+            mac_inst = (
+                "1. Install Node.js (v20 LTS)\n"
+                "   - macOS 12+ (Monterey+): Run 'brew install node' or use the official installer.\n"
+                "   - macOS 11 (Big Sur): Download the v20 .pkg from https://nodejs.org\n\n"
+                "2. Open Terminal and run these commands one by one:\n"
+                "   sudo npm install -g --unsafe-perm homebridge homebridge-config-ui-x\n"
+                "   sudo npm install -g homebridge-wemo homebridge-alexa\n"
+                "   mkdir -p ~/.homebridge\n"
+                "   sudo hb-service install\n"
+            )
+            self.mac_install_text = ctk.CTkTextbox(self.install_frame, height=180, font=FONT_MONO, fg_color=COLOR_BG)
+            self.mac_install_text.insert("1.0", mac_inst)
+            self.mac_install_text.configure(state="disabled")
+        else:
+            # Windows / Linux UI (Auto-Installer Button)
+            self.lbl_install_desc = ctk.CTkLabel(self.install_frame, text="Homebridge is not running. Install the compatibility layer to enable Alexa/Google Home.", font=FONT_BODY, text_color=COLOR_SUBTEXT, anchor="w")
+            self.btn_install_hoobs = ctk.CTkButton(self.install_frame, text="Install Compatibility Layer", height=40, fg_color=COLOR_SUCCESS, command=self.run_hoobs_installer)
+        
+        # Connected UI
         self.lbl_connect_header = ctk.CTkLabel(self.install_frame, text="2. Connection & Setup", font=FONT_H2, text_color=COLOR_TEXT, anchor="w")
         self.lbl_connect_desc = ctk.CTkLabel(self.install_frame, text="Homebridge is running! Follow these steps to finish setup:", font=FONT_BODY, text_color=COLOR_SUBTEXT, anchor="w")
         self.connect_steps = ctk.CTkTextbox(self.install_frame, height=120, font=FONT_BODY, fg_color=COLOR_BG)
-        self.connect_steps.insert("1.0", "1. Click 'Launch Dashboard' below.\n2. Login with admin / admin.\n3. Go to Plugins -> Search 'homebridge-platform-wemo' -> Install.\n4. Go to Config -> Paste the JSON from above into 'platforms'.\n5. Restart Homebridge (Top Right Icon).")
+        self.connect_steps.insert("1.0", "1. Click 'Launch Dashboard' below.\n2. Login with admin / admin.\n3. Go to Plugins -> Search 'homebridge-wemo' -> Install.\n4. Go to Config -> Paste the JSON from above into 'platforms'.\n5. Restart Homebridge (Top Right Icon).")
         self.connect_steps.configure(state="disabled")
         self.btn_open_hoobs = ctk.CTkButton(self.install_frame, text="Launch Dashboard (localhost:8581)", height=40, fg_color=COLOR_ACCENT, command=lambda: webbrowser.open(HOOBS_URL))
 
         self._update_hoobs_ui(False)
 
     def _hoobs_monitor(self):
+        last_state = None
         while self.monitoring:
             is_running = NetworkUtils.check_hoobs_status()
             self.hoobs_online = is_running
-            self.after(0, lambda: self._update_status_label(is_running))
-            self.after(0, lambda: self._update_hoobs_ui(is_running))
+            if is_running != last_state:
+                self.after(0, lambda: self._update_status_label(is_running))
+                self.after(0, lambda: self._update_hoobs_ui(is_running))
+                last_state = is_running
             time.sleep(5)
 
     def _update_status_label(self, is_running):
@@ -681,10 +692,20 @@ class WemoOpsApp(ctk.CTk):
 
     def _update_hoobs_ui(self, is_running):
         for widget in self.install_frame.winfo_children(): widget.pack_forget()
+        
         if is_running:
-            self.lbl_connect_header.pack(fill="x", pady=(0,5)); self.lbl_connect_desc.pack(fill="x", pady=(0,10)); self.connect_steps.pack(fill="x", pady=(0,10)); self.btn_open_hoobs.pack(fill="x")
+            self.lbl_connect_header.pack(fill="x", pady=(0,5))
+            self.lbl_connect_desc.pack(fill="x", pady=(0,10))
+            self.connect_steps.pack(fill="x", pady=(0,10))
+            self.btn_open_hoobs.pack(fill="x")
         else:
-            self.lbl_install_header.pack(fill="x", pady=(0,5)); self.lbl_install_desc.pack(fill="x", pady=(0,10)); self.btn_install_hoobs.pack(fill="x")
+            self.lbl_install_header.pack(fill="x", pady=(0,5))
+            if sys.platform == "darwin":
+                self.lbl_mac_install_desc.pack(fill="x", pady=(0,5))
+                self.mac_install_text.pack(fill="x", pady=(0,10))
+            else:
+                self.lbl_install_desc.pack(fill="x", pady=(0,10))
+                self.btn_install_hoobs.pack(fill="x")
 
     def generate_hoobs_config(self):
         devices = []
@@ -697,20 +718,38 @@ class WemoOpsApp(ctk.CTk):
         self.hoobs_text.delete("1.0", "end"); self.hoobs_text.insert("1.0", json_str)
 
     def run_hoobs_installer(self):
-        target = None; exe_path = os.path.join(BASE_DIR, "Wemo_HOOBS_Integration_Setup.exe")
-        if not os.path.exists(exe_path): exe_path = "Wemo_HOOBS_Integration_Setup.exe"
-        script_path = "hoobs_installer.py"
-        if os.path.exists(exe_path): target = exe_path; is_script = False
-        elif os.path.exists(script_path): target = script_path; is_script = True
-        else: messagebox.showerror("Missing Component", "Could not find 'hoobs_installer.py' or 'Wemo_HOOBS_Integration_Setup.exe' in the application directory."); return
+        # This function is now only called on Windows / Linux
+        target = None
+        is_script = False
+        if sys.platform == "win32":
+            target = os.path.join(BASE_DIR, "Wemo_HOOBS_Integration_Setup.exe")
+        else:
+            bin_name = "wemo_hoobs_setup"
+            if getattr(sys, 'frozen', False):
+                base = os.path.dirname(sys.executable)
+                possible = os.path.join(base, bin_name)
+                if os.path.exists(possible): target = possible
+            if not target:
+                script = os.path.join(BASE_DIR, "hoobs_installer.py")
+                if os.path.exists(script): target = script; is_script = True
+        
+        if not target or not os.path.exists(target):
+             if os.path.exists("wemo_hoobs_setup"): target = "wemo_hoobs_setup"
+        
+        if not target or not os.path.exists(target):
+            messagebox.showerror("Error", "Installer component not found.")
+            return
+        
         try:
             if sys.platform == "win32":
                 import ctypes
                 if is_script: ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, target, None, 1)
                 else: ctypes.windll.shell32.ShellExecuteW(None, "runas", target, "", None, 1)
             else:
-                if is_script: subprocess.Popen(f"sudo python3 {target}".split(), shell=True)
-        except Exception as e: messagebox.showerror("Launch Error", f"Failed to launch installer: {e}")
+                cmd = f"sudo python3 {target}" if is_script else f"sudo {target}"
+                try: subprocess.Popen(['xterm', '-e', cmd])
+                except: subprocess.Popen(cmd.split())
+        except Exception as e: messagebox.showerror("Launch Error", str(e))
 
     # --- STATE POLLER ---
     def _state_poller(self):
@@ -734,7 +773,7 @@ class WemoOpsApp(ctk.CTk):
                 else: sw.deselect()
             except: pass
 
-    # --- OTHER SECTIONS ---
+    # --- PROVISIONER ---
     def create_provisioner(self):
         f = ctk.CTkFrame(self.content, fg_color="transparent"); self.frames["prov"] = f
         f.columnconfigure(0, weight=1); f.columnconfigure(1, weight=2); f.rowconfigure(0, weight=1)
@@ -919,7 +958,6 @@ class WemoOpsApp(ctk.CTk):
                         if self.frames["sched"].winfo_ismapped(): self.after(0, self.render_jobs)
                 if self.api.connected: self.sched_mode_lbl.configure(text="MODE: SERVER", text_color=COLOR_ACCENT); time.sleep(2); continue
                 else: self.sched_mode_lbl.configure(text="MODE: LOCAL", text_color="orange")
-                # ... (Execution logic simplified for brevity, assumes standard logic) ...
             except Exception as e: pass
             time.sleep(2) 
 
@@ -931,19 +969,16 @@ class WemoOpsApp(ctk.CTk):
         grid = ctk.CTkFrame(f, fg_color="transparent"); grid.pack(fill="both", expand=True, padx=20, pady=10)
         grid.columnconfigure(0, weight=1); grid.columnconfigure(1, weight=1); grid.columnconfigure(2, weight=1)
         
-        # Reset 1
         c1 = ctk.CTkFrame(grid, fg_color=("#fff8e1", "#332222")); c1.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
         ctk.CTkLabel(c1, text="Personal Data", font=FONT_H2, text_color=("#b38f00", "#ffcc00")).pack(pady=(15,5))
         ctk.CTkLabel(c1, text="Clears Name, Icon, Rules.\nKeeps Wi-Fi Connection.", text_color="gray", font=("Arial", 11)).pack(pady=5)
         ctk.CTkButton(c1, text="Reset Data (1)", fg_color=COLOR_MAINT_BTN_Y, text_color="#000000", command=lambda: self.run_reset_command(1)).pack(pady=15)
         
-        # Reset 5
         c2 = ctk.CTkFrame(grid, fg_color=("#e3f2fd", "#222233")); c2.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
         ctk.CTkLabel(c2, text="Wi-Fi Setup", font=FONT_H2, text_color=("#0055aa", "#66aaff")).pack(pady=(15,5))
         ctk.CTkLabel(c2, text="Clears Wi-Fi Credentials.\nReturns to Setup Mode.", text_color="gray", font=("Arial", 11)).pack(pady=5)
         ctk.CTkButton(c2, text="Reset Wi-Fi (5)", fg_color=COLOR_MAINT_BTN_B, text_color="#ffffff", command=lambda: self.run_reset_command(5)).pack(pady=15)
         
-        # Reset 2
         c3 = ctk.CTkFrame(grid, fg_color=("#ffebee", "#330000")); c3.grid(row=0, column=2, sticky="nsew", padx=10, pady=10)
         ctk.CTkLabel(c3, text="Factory Default", font=FONT_H2, text_color=("#aa0000", "#ff4444")).pack(pady=(15,5))
         ctk.CTkLabel(c3, text="Wipes Everything.\nLike New Out-of-Box.", text_color="gray", font=("Arial", 11)).pack(pady=5)
