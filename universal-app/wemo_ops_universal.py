@@ -4,6 +4,7 @@ from pywemo.ouimeaux_device.dimmer import Dimmer
 import threading
 import sys
 import os
+import shutil  # <-- FIXED: Added missing import for Linux terminal detection
 import time
 import json
 import requests
@@ -30,7 +31,7 @@ except Exception as e:
     HAS_QR = False
 
 # --- CONFIGURATION ---
-VERSION = "v5.3.0"
+VERSION = "v5.3.0-Stable"
 SERVER_PORT = 5050
 HOOBS_PORT = 8581
 SERVER_URL = f"http://localhost:{SERVER_PORT}"
@@ -416,8 +417,10 @@ class WemoOpsApp(ctk.CTk):
                 with open(p) as f: return json.load(f)
             except: pass
         return t()
+        
     def save_json(self, p, d):
         with open(p, 'w') as f: json.dump(d, f)
+        
     def set_ui_scale(self, s):
         try: ctk.set_widget_scaling(int(str(s).replace("%", ""))/100)
         except: pass
@@ -431,6 +434,7 @@ class WemoOpsApp(ctk.CTk):
         btn.pack(pady=2, padx=10, fill="x")
         setattr(self, f"btn_{view_name}", btn)
         return btn
+        
     def show_tab(self, name):
         for key, frame in self.frames.items(): frame.pack_forget()
         self.frames[name].pack(fill="both", expand=True)
@@ -737,18 +741,42 @@ class WemoOpsApp(ctk.CTk):
              if os.path.exists("wemo_hoobs_setup"): target = "wemo_hoobs_setup"
         
         if not target or not os.path.exists(target):
-            messagebox.showerror("Error", "Installer component not found.")
+            messagebox.showerror("Error", "Installer component not found in application directory.")
             return
         
+        # Execute Installer Securely
         try:
             if sys.platform == "win32":
                 import ctypes
                 if is_script: ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, target, None, 1)
                 else: ctypes.windll.shell32.ShellExecuteW(None, "runas", target, "", None, 1)
             else:
-                cmd = f"sudo python3 {target}" if is_script else f"sudo {target}"
-                try: subprocess.Popen(['xterm', '-e', cmd])
-                except: subprocess.Popen(cmd.split())
+                # Add quotes around the target path to handle spaces safely
+                cmd = f'sudo python3 "{target}"' if is_script else f'sudo "{target}"'
+                
+                # Check for standard Linux terminal emulators and launch visible terminal
+                term_launched = False
+                terminals = {
+                    'gnome-terminal': ['--', 'bash', '-c'],
+                    'konsole': ['-e', 'bash', '-c'],
+                    'xfce4-terminal': ['-x', 'bash', '-c'],
+                    'xterm': ['-e', 'bash', '-c']
+                }
+                
+                for term, flags in terminals.items():
+                    if shutil.which(term):
+                        try:
+                            # Wrap command in bash to ensure sudo prompts function correctly in popup window
+                            subprocess.Popen([term] + flags + [cmd])
+                            term_launched = True
+                            break
+                        except Exception:
+                            pass
+                
+                # Fallback if no known terminal emulator is found
+                if not term_launched:
+                    subprocess.Popen(cmd.split())
+                    
         except Exception as e: messagebox.showerror("Launch Error", str(e))
 
     # --- STATE POLLER ---

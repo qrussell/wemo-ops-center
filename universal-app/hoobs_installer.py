@@ -17,7 +17,6 @@ def refresh_paths():
     if platform.system() == "Windows":
         os.environ["PATH"] += os.pathsep + r"C:\Program Files\nodejs"
     else:
-        # Default install path for Mac pkg and Linux
         os.environ["PATH"] += os.pathsep + "/usr/local/bin"
 
 def check_command(command):
@@ -25,7 +24,6 @@ def check_command(command):
     return shutil.which(command) is not None
 
 def run_command(command, shell=False, sudo=False):
-    """Run a shell command safely across operating systems."""
     if sudo and sys.platform != "win32":
         if isinstance(command, list):
             command = ["sudo"] + command
@@ -57,19 +55,31 @@ def auto_install_node():
             print("    Running Installer (Please wait)...")
             run_command(["msiexec.exe", "/i", dest, "/passive"], shell=False)
             
-        elif os_type == "Darwin": # macOS
-            # Bypasses Homebrew entirely to avoid OS-version lockouts (Big Sur)
+        elif os_type == "Darwin":
             url = "https://nodejs.org/dist/v20.18.0/node-v20.18.0.pkg"
             dest = os.path.join(temp_dir, "node_installer.pkg")
-            print(f"    Downloading Official Mac Installer (Bypassing Homebrew)...")
+            print(f"    Downloading Official Mac Installer...")
             urllib.request.urlretrieve(url, dest)
             print("    Running Apple Installer (Requires your Mac password)...")
             run_command(["installer", "-pkg", dest, "-target", "/"], shell=False, sudo=True)
             
         elif os_type == "Linux":
-            print("    Running Official NodeSource Setup Script...")
-            run_command("curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -", shell=True)
-            run_command(["apt-get", "install", "-y", "nodejs"], shell=False, sudo=True)
+            # Dynamically detect the package manager for RPM vs DEB systems
+            if check_command("apt-get"):
+                print("    Running Official NodeSource Setup Script (Debian/Ubuntu)...")
+                run_command("curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -", shell=True)
+                run_command(["apt-get", "install", "-y", "nodejs"], shell=False, sudo=True)
+            elif check_command("dnf"):
+                print("    Running Official NodeSource Setup Script (Fedora/RHEL/Rocky)...")
+                run_command("curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -", shell=True)
+                run_command(["dnf", "install", "-y", "nodejs"], shell=False, sudo=True)
+            elif check_command("yum"):
+                print("    Running Official NodeSource Setup Script (CentOS)...")
+                run_command("curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -", shell=True)
+                run_command(["yum", "install", "-y", "nodejs"], shell=False, sudo=True)
+            else:
+                print("    [!] Unknown package manager. Please install Node.js manually.")
+                return False
             
     except Exception as e:
         print(f"[!] Auto-install failed: {e}")
@@ -83,7 +93,6 @@ def main():
     os_type = platform.system()
     print(f"[*] Detected OS: {os_type}")
     
-    # 1. Check & Auto-Install Node.js
     if not check_command("npm"):
         if not auto_install_node():
             print("\n[!] FATAL: Could not automatically install Node.js.")
@@ -93,7 +102,6 @@ def main():
     
     print("[*] Node.js (npm) is installed and ready.")
 
-    # 2. Confirm Installation
     print("\nThis script will install:")
     print("  - Homebridge (Core Server)")
     print("  - Homebridge Config UI X (Dashboard)")
@@ -107,36 +115,32 @@ def main():
 
     use_sudo = (os_type != "Windows")
 
-    # 3. Install Homebridge & UI
     print("\n[*] Installing Homebridge Core & UI...")
     npm_cmd = ["npm", "install", "-g", "--unsafe-perm", "homebridge", "homebridge-config-ui-x"]
     if run_command(npm_cmd, shell=(os_type == "Windows"), sudo=use_sudo):
         print("[+] Core installed successfully.")
     else:
         print("[!] Failed to install Homebridge. Ensure you are running as Administrator/Root.")
+        input("Press Enter to exit...")
         sys.exit(1)
 
-    # 4. Install Plugins
     print("\n[*] Installing Plugins...")
     plugin_cmd = ["npm", "install", "-g", "homebridge-wemo", "homebridge-alexa"]
     if run_command(plugin_cmd, shell=(os_type == "Windows"), sudo=use_sudo):
         print("[+] Plugins installed.")
     else:
         print("[!] Plugin installation failed.")
+        input("Press Enter to exit...")
         sys.exit(1)
 
-    # 5. Service Setup
     print("\n[*] Setting up System Service...")
-    
-    # Pre-create the config directory to prevent ENOENT crashes on Mac/Linux
     homebridge_dir = os.path.expanduser("~/.homebridge")
     try:
         os.makedirs(homebridge_dir, exist_ok=True)
         print(f"[*] Ensured configuration directory exists: {homebridge_dir}")
     except Exception as e:
-        print(f"[!] Warning: Could not create {homebridge_dir}: {e}")
+        pass
 
-    # Use exact path to hb-service if standard name fails
     hb_service_cmd = "hb-service" if check_command("hb-service") else "npx hb-service"
     
     if run_command([hb_service_cmd, "install"], shell=(os_type == "Windows"), sudo=use_sudo):
@@ -144,7 +148,6 @@ def main():
     else:
         print("[!] Service setup failed. You may need to run 'sudo hb-service install' manually.")
 
-    # 6. Final Instructions
     print("\n" + "="*50)
     print("   INSTALLATION COMPLETE")
     print("="*50)
@@ -157,7 +160,6 @@ def main():
     input("\nPress Enter to close.")
 
 if __name__ == "__main__":
-    # Request Admin privileges on Windows before starting
     if platform.system() == "Windows":
         import ctypes
         if not ctypes.windll.shell32.IsUserAnAdmin():

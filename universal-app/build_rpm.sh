@@ -2,7 +2,7 @@
 
 # ==============================================================================
 #  WEMO OPS - MASTER BUILDER (RPM / Rocky / Fedora / RHEL)
-#  Version: 5.2.3-Stable
+#  Version: 5.3.0-Stable
 # ==============================================================================
 
 set -e
@@ -10,12 +10,13 @@ set -e
 # --- CONFIGURATION ---
 APP_NAME="WemoOps"
 SAFE_NAME="wemo-ops"
-VERSION="5.2.3"
-RELEASE="2"
+VERSION="5.3.0"
+RELEASE="1"
 ARCH="x86_64"
 SUMMARY="Wemo Ops Center - Automation Server and Client"
 CLIENT_SCRIPT="wemo_ops_universal.py"
 SERVER_SCRIPT="wemo_server.py"
+HOOBS_SCRIPT="hoobs_installer.py"
 
 # 1. SETUP PATHS
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -64,7 +65,6 @@ source .venv/bin/activate
 
 echo "   > Installing Python libraries..."
 pip install --upgrade pip --quiet
-# Force binary preference to avoid compilation issues on Linux
 pip install "pywemo>=2.1.1" customtkinter requests pyinstaller pyperclip Pillow flask qrcode waitress --quiet --prefer-binary
 
 rm -rf dist/rpm_build
@@ -95,6 +95,15 @@ pyinstaller --noconfirm --onefile --noconsole \
     --hidden-import waitress \
     "$SERVER_SCRIPT" >/dev/null
 
+# C. Build HOOBS Installer
+if [ -f "$HOOBS_SCRIPT" ]; then
+    echo "   > Compiling HOOBS Installer ($HOOBS_SCRIPT)..."
+    # Note: Built WITH console so the user can see the terminal output
+    pyinstaller --noconfirm --onefile \
+        --name "wemo_hoobs_setup" \
+        "$HOOBS_SCRIPT" >/dev/null
+fi
+
 deactivate
 
 if [ ! -f "dist/wemo-ops-client" ] || [ ! -f "dist/wemo-ops-server" ]; then
@@ -111,6 +120,9 @@ mkdir -p "$SOURCE_DIR"
 
 cp "dist/wemo-ops-client" "$SOURCE_DIR/"
 cp "dist/wemo-ops-server" "$SOURCE_DIR/"
+if [ -f "dist/wemo_hoobs_setup" ]; then
+    cp "dist/wemo_hoobs_setup" "$SOURCE_DIR/"
+fi
 
 if [ -f "images/app_icon.ico" ]; then
     cp "images/app_icon.ico" "$SOURCE_DIR/"
@@ -137,7 +149,6 @@ Source0:        %{name}-%{version}.tar.gz
 BuildArch:      $ARCH
 AutoReqProv:    no
 
-# Ensure python3-tkinter is required for runtime
 Requires:       python3, python3-tkinter, fontconfig, liberation-sans-fonts
 
 %description
@@ -147,7 +158,6 @@ Wemo Ops is a complete automation suite for Belkin Wemo devices.
 %setup -q
 
 %build
-# Binaries are pre-built via PyInstaller
 
 %install
 mkdir -p %{buildroot}$INSTALL_DIR
@@ -158,6 +168,10 @@ mkdir -p %{buildroot}/usr/lib/systemd/system
 
 install -m 755 wemo-ops-client %{buildroot}$INSTALL_DIR/wemo-ops-client
 install -m 755 wemo-ops-server %{buildroot}$INSTALL_DIR/wemo-ops-server
+
+if [ -f wemo_hoobs_setup ]; then
+    install -m 755 wemo_hoobs_setup %{buildroot}$INSTALL_DIR/wemo_hoobs_setup
+fi
 
 if [ -f app_icon.ico ]; then
     install -m 644 app_icon.ico %{buildroot}$INSTALL_DIR/images/app_icon.ico
@@ -206,33 +220,20 @@ $INSTALL_DIR
 /usr/lib/systemd/system/wemo-ops-server.service
 
 %post
-# 1. Update Desktop Database
 update-desktop-database &> /dev/null || :
-
-# 2. Configure Systemd (Enable and Start)
 systemctl daemon-reload
 systemctl enable --now wemo-ops-server
 
-# 3. Configure Firewall (Open Ports)
 if command -v firewall-cmd &> /dev/null; then
     if systemctl is-active --quiet firewalld; then
         echo "🔥 Wemo Ops: Configuring Firewall Ports..."
-        # App UI
         firewall-cmd --permanent --add-port=5000/tcp &> /dev/null || :
         firewall-cmd --permanent --add-port=5050/tcp &> /dev/null || :
-        # Wemo Control
         firewall-cmd --permanent --add-port=49152-49155/tcp &> /dev/null || :
-        # SSDP Discovery
         firewall-cmd --permanent --add-port=1900/udp &> /dev/null || :
-        
         firewall-cmd --reload &> /dev/null || :
-        echo "✅ Firewall Updated."
     fi
 fi
-
-echo "--------------------------------------------------------"
-echo "✅ Wemo Ops installed successfully!"
-echo "--------------------------------------------------------"
 
 %preun
 if [ \$1 -eq 0 ]; then
@@ -245,10 +246,6 @@ update-desktop-database &> /dev/null || :
 if [ \$1 -eq 0 ]; then
     rm -rf $INSTALL_DIR
 fi
-
-%changelog
-* $(date "+%a %b %d %Y") Quentin Russell <user@example.com> - $VERSION-$RELEASE
-- Release $VERSION
 EOF
 
 # 6. BUILD RPM
