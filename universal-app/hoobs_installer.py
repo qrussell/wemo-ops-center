@@ -5,6 +5,7 @@ import platform
 import shutil
 import urllib.request
 import tempfile
+import getpass
 
 def print_header():
     print("=======================================================")
@@ -134,19 +135,46 @@ def main():
         sys.exit(1)
 
     print("\n[*] Setting up System Service...")
-    homebridge_dir = os.path.expanduser("~/.homebridge")
-    try:
-        os.makedirs(homebridge_dir, exist_ok=True)
-        print(f"[*] Ensured configuration directory exists: {homebridge_dir}")
-    except Exception as e:
-        pass
-
-    hb_service_cmd = "hb-service" if check_command("hb-service") else "npx hb-service"
     
-    if run_command([hb_service_cmd, "install"], shell=(os_type == "Windows"), sudo=use_sudo):
+    # 1. Detect the original user (handles if the script was launched via sudo)
+    target_user = getpass.getuser()
+    if os_type != "Windows":
+        # Pull original user from SUDO_USER env var, fallback to current user
+        target_user = os.environ.get("SUDO_USER", target_user)
+        
+        # 2. Pre-create the config directory safely in the REAL user's home folder
+        try:
+            import pwd
+            user_home = pwd.getpwnam(target_user).pw_dir
+            homebridge_dir = os.path.join(user_home, ".homebridge")
+            os.makedirs(homebridge_dir, exist_ok=True)
+            
+            # Correct ownership so the user can edit it, not just root
+            uid = pwd.getpwnam(target_user).pw_uid
+            gid = pwd.getpwnam(target_user).pw_gid
+            os.chown(homebridge_dir, uid, gid)
+            print(f"[*] Ensured configuration directory exists: {homebridge_dir}")
+        except Exception as e:
+            print(f"[!] Warning: Could not create {homebridge_dir}: {e}")
+    else:
+        homebridge_dir = os.path.expanduser("~/.homebridge")
+        try:
+            os.makedirs(homebridge_dir, exist_ok=True)
+        except Exception:
+            pass
+
+    # 3. Build the hb-service command
+    hb_service_base = ["hb-service"] if check_command("hb-service") else ["npx", "hb-service"]
+    service_cmd = hb_service_base + ["install"]
+    
+    # Inject the required user flag on Linux/macOS
+    if os_type != "Windows":
+        service_cmd.extend(["--user", target_user])
+    
+    if run_command(service_cmd, shell=(os_type == "Windows"), sudo=use_sudo):
         print("[+] Service installed and started!")
     else:
-        print("[!] Service setup failed. You may need to run 'sudo hb-service install' manually.")
+        print(f"[!] Service setup failed. You may need to run 'sudo hb-service install --user {target_user}' manually.")
 
     print("\n" + "="*50)
     print("   INSTALLATION COMPLETE")

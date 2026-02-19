@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # ==============================================================================
-#  WEMO OPS - MASTER BUILDER (DEB / Debian / Ubuntu / Raspberry Pi)
-#  Version: 5.2.3-Stable
+#  WEMO OPS - MASTER BUILDER (DEB / Debian / Ubuntu / Linux Mint)
+#  Version: 5.3.0-Stable
 # ==============================================================================
 
 # --- CRITICAL: Stop immediately if any command fails ---
@@ -11,12 +11,13 @@ set -e
 # --- CONFIGURATION ---
 APP_NAME="WemoOps"
 SAFE_NAME="wemo-ops"
-VERSION="5.2.3-2"
+VERSION="5.3.0-1"
 ARCH="amd64"     # Change to 'arm64' if building on Raspberry Pi
 MAINTAINER="Quentin Russell <quentin@quentinrussell.com>"
 DESC="Wemo Ops Center - Automation Server and Client"
 CLIENT_SCRIPT="wemo_ops_universal.py"
 SERVER_SCRIPT="wemo_server.py"
+HOOBS_SCRIPT="hoobs_installer.py"
 
 # 1. SETUP PATHS
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -55,7 +56,7 @@ pip install --upgrade pip --quiet
 pip install "pywemo>=2.1.1" customtkinter requests pyinstaller pyperclip Pillow flask qrcode waitress --quiet
 
 # Clean previous builds
-rm -rf build/ dist/
+rm -rf build/ dist/deb_staging dist/*.deb
 
 # A. Build Client (GUI)
 echo "   > Compiling Client ($CLIENT_SCRIPT)..."
@@ -82,6 +83,15 @@ pyinstaller --noconfirm --onefile --noconsole \
     --hidden-import waitress \
     "$SERVER_SCRIPT" >/dev/null
 
+# C. Build HOOBS Installer
+if [ -f "$HOOBS_SCRIPT" ]; then
+    echo "   > Compiling HOOBS Installer ($HOOBS_SCRIPT)..."
+    # Note: Built WITH console so the user can see the terminal output
+    pyinstaller --noconfirm --onefile \
+        --name "wemo_hoobs_setup" \
+        "$HOOBS_SCRIPT" >/dev/null
+fi
+
 deactivate
 
 # Verify binaries
@@ -106,6 +116,10 @@ echo "[4/6] Copying Files..."
 # Copy Binaries
 cp "dist/wemo-ops-client" "$STAGING_DIR$INSTALL_DIR/"
 cp "dist/wemo-ops-server" "$STAGING_DIR$INSTALL_DIR/"
+
+if [ -f "dist/wemo_hoobs_setup" ]; then
+    cp "dist/wemo_hoobs_setup" "$STAGING_DIR$INSTALL_DIR/"
+fi
 
 # Copy Icon
 if [ -f "images/app_icon.ico" ]; then
@@ -146,7 +160,6 @@ ExecStart=$INSTALL_DIR/wemo-ops-server
 WorkingDirectory=$INSTALL_DIR
 Restart=always
 User=root
-# Environment=PYTHONUNBUFFERED=1
 
 [Install]
 WantedBy=multi-user.target
@@ -176,6 +189,9 @@ set -e
 # 1. Fix Permissions
 chmod 755 $INSTALL_DIR/wemo-ops-client
 chmod 755 $INSTALL_DIR/wemo-ops-server
+if [ -f "$INSTALL_DIR/wemo_hoobs_setup" ]; then
+    chmod 755 $INSTALL_DIR/wemo_hoobs_setup
+fi
 
 # 2. Update Desktop Database
 if command -v update-desktop-database > /dev/null; then
@@ -183,7 +199,6 @@ if command -v update-desktop-database > /dev/null; then
 fi
 
 # 3. SERVICE AUTO-START (Critical Fix)
-# We check if systemd is running (to avoid errors in docker/chroot builds)
 if [ -d /run/systemd/system ]; then
     echo "⚙️  Configuring Systemd Service..."
     systemctl daemon-reload
