@@ -360,13 +360,12 @@ class WemoOpsApp(ctk.CTk):
         self.btn_sched = self.create_nav_btn("Automation", "sched")
         self.btn_maint = self.create_nav_btn("Maintenance", "maint")
         self.btn_bridge = self.create_nav_btn("Integrations", "bridge")
+        self.btn_settings = self.create_nav_btn("Settings", "settings") # <-- MOVED HERE
         
         ctk.CTkFrame(self.sidebar, fg_color="transparent").pack(expand=True)
         
         if HAS_QR:
             ctk.CTkButton(self.sidebar, text="📱 Mobile App", fg_color=COLOR_ACCENT, command=self.show_qr_code).pack(pady=5, padx=10)
-
-        self.btn_settings = self.create_nav_btn("Settings", "settings")
 
         self.service_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         self.service_frame.pack(side="bottom", fill="x", pady=20, padx=10)
@@ -725,6 +724,8 @@ class WemoOpsApp(ctk.CTk):
         # This function is now only called on Windows / Linux
         target = None
         is_script = False
+        
+        # Determine executable path
         if sys.platform == "win32":
             target = os.path.join(BASE_DIR, "Wemo_HOOBS_Integration_Setup.exe")
         else:
@@ -756,18 +757,28 @@ class WemoOpsApp(ctk.CTk):
                 
                 # Check for standard Linux terminal emulators and launch visible terminal
                 term_launched = False
+                
+                # Wrap command to keep terminal open if there's an immediate failure
+                bash_wrapper = f"{cmd}; echo; read -p 'Press Enter to exit...'"
+                
                 terminals = {
-                    'gnome-terminal': ['--', 'bash', '-c'],
-                    'konsole': ['-e', 'bash', '-c'],
-                    'xfce4-terminal': ['-x', 'bash', '-c'],
-                    'xterm': ['-e', 'bash', '-c']
+                    'ptyxis': ['--', 'bash', '-c'],          # Fedora 40+ GNOME
+                    'kgx': ['-e', 'bash', '-c'],             # Fedora 39/GNOME Console
+                    'gnome-terminal': ['--', 'bash', '-c'],  # Ubuntu/Older GNOME
+                    'konsole': ['-e', 'bash', '-c'],         # KDE (Fedora Spin / Kubuntu)
+                    'xfce4-terminal': ['-x', 'bash', '-c'],  # XFCE
+                    'mate-terminal': ['-x', 'bash', '-c'],   # MATE
+                    'lxterminal': ['-e', 'bash', '-c'],      # LXDE
+                    'tilix': ['-e', 'bash', '-c'],           # Tilix
+                    'terminator': ['-x', 'bash', '-c'],      # Terminator
+                    'xterm': ['-e', 'bash', '-c']            # Universal Fallback
                 }
                 
                 for term, flags in terminals.items():
                     if shutil.which(term):
                         try:
                             # Wrap command in bash to ensure sudo prompts function correctly in popup window
-                            subprocess.Popen([term] + flags + [cmd])
+                            subprocess.Popen([term] + flags + [bash_wrapper])
                             term_launched = True
                             break
                         except Exception:
