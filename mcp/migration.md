@@ -517,6 +517,41 @@ This directory is preserved for historical reference and contains the original d
 
 **Recommendation:** Keep with deprecation notice for at least 6 months, then consider archival.
 
+### 5.4 Phase 5 Results ✅
+
+**Status:** ✅ Complete - Original repository updated with migration notices
+
+**What Was Done:**
+1. ✅ Updated main README.md to reference new dedicated repository
+2. ✅ Changed MCP Server table entry to point to apiarya/wemo-mcp-server
+3. ✅ Updated version from v1.0.0 to v1.1.0 in documentation
+4. ✅ Added prominent migration note after features table
+5. ✅ Updated MCP Server section (line 214) with "🏠 New Home" notice
+6. ✅ Changed image URL from qrussell/.../mcp/assets to apiarya repository
+7. ✅ Updated documentation link from mcp/README.md to new repository
+8. ✅ Replaced mcp/README.md with comprehensive deprecation notice
+9. ✅ Preserved mcp/ directory for historical reference
+
+**Files Modified:**
+- `README.md` - Updated MCP Server references throughout (34 insertions, 3 deletions)
+- `mcp/README.md` - Replaced with migration notice (deletion of 441 lines, 31 additions)
+
+**Commits:**
+- Phase 5 commit: `97ce71c` on `mcp-migration` branch
+- Migration doc update: `a5eed9e` (Phase 4 documentation)
+
+**Repository Access Note:**
+Changes are committed locally on the `mcp-migration` branch. Since this is @qrussell's repository, one of these approaches is needed:
+1. **Option A:** Have @qrussell pull the `mcp-migration` branch and merge
+2. **Option B:** Create a pull request from a fork
+3. **Option C:** Share the commits as a patch file
+4. **Option D:** Have @qrussell make these changes directly
+
+**Next Steps:**
+- Coordinate with @qrussell to integrate Phase 5 changes
+- Proceed with Phase 6: Testing & Validation
+- Phase 7: Final communications
+
 ---
 
 ## Phase 6: Testing & Validation ✅
@@ -909,6 +944,17 @@ Migration is considered successful when:
 
 ## Notes & Updates
 
+### February 22, 2026 - 1:10 AM
+- ✅ **Phase 5 COMPLETED**
+- Updated main README.md with new repository references and migration notice
+- Changed MCP Server table entry to point to apiarya/wemo-mcp-server
+- Updated version references from v1.0.0 to v1.1.0
+- Added prominent "New Home" notice in MCP Server section
+- Replaced mcp/README.md with comprehensive deprecation notice
+- Commit 97ce71c created on mcp-migration branch
+- Repository access: Changes ready for @qrussell to pull/merge
+- Ready to proceed with Phase 6: Testing & Validation
+
 ### February 22, 2026 - 12:55 AM
 - ✅ **Phase 4 COMPLETED**
 - Version bumped to v1.1.0 in all files (pyproject.toml, __init__.py, server.json)
@@ -960,6 +1006,6 @@ Migration is considered successful when:
 
 ---
 
-**Document Version:** 1.4  
-**Last Updated:** February 22, 2026 - 12:55 AM  
-**Status:** Phase 4 Complete - v1.1.0 Published to PyPI - Ready for Phase 5 (Update Original Repository)
+**Document Version:** 1.5  
+**Last Updated:** February 22, 2026 - 1:10 AM  
+**Status:** Phase 5 Complete - Original Repo Updated - Ready for Phase 6 (Testing & Validation)
