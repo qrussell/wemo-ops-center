@@ -531,14 +531,30 @@ This directory is preserved for historical reference and contains the original d
 7. ✅ Updated documentation link from mcp/README.md to new repository
 8. ✅ Replaced mcp/README.md with comprehensive deprecation notice
 9. ✅ Preserved mcp/ directory for historical reference
+10. ✅ **Cleaned up old MCP code from mcp/ directory (14 files removed, 2061 deletions)**
+
+**Files Removed from mcp/ directory:**
+- Source code: `src/wemo_mcp_server/` (3 files)
+- Tests: `tests/` (3 files)
+- Config: `pyproject.toml`, `server.json`, `.gitignore`
+- Dev infrastructure: `.github/copilot-instructions.md`
+- Old docs: `CHANGELOG.md`, `RELEASE.md`, `RELEASE_CHECKLIST.md`, `MCP_REGISTRY_SUBMISSION.md`
+
+**Files Preserved in mcp/ directory:**
+- `README.md` - Migration notice directing users to new repository
+- `migration.md` - Complete historical documentation of migration process
+- `LICENSE` - MIT license (always preserve)
+- `assets/` - Images referenced in external documentation
 
 **Files Modified:**
 - `README.md` - Updated MCP Server references throughout (34 insertions, 3 deletions)
-- `mcp/README.md` - Replaced with migration notice (deletion of 441 lines, 31 additions)
+- `mcp/README.md` - Replaced with migration notice (31 insertions, 441 deletions)
+- `mcp/` directory - Removed 14 old code/config files (2061 deletions total)
 
 **Commits:**
-- Phase 5 commit: `97ce71c` on `mcp-migration` branch
-- Migration doc update: `a5eed9e` (Phase 4 documentation)
+- Phase 5 initial updates: `97ce71c` on `mcp-migration` branch
+- Phase 5 cleanup: `5ef6115` - Removed all old MCP code from mcp/ directory
+- Migration doc updates: `a5eed9e`, `de760aa`, `b3be796`
 
 **Repository Access Note:**
 Changes are committed locally on the `mcp-migration` branch and pushed to fork.
