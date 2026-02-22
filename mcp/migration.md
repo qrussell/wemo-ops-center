@@ -146,6 +146,105 @@ Issues = "https://github.com/apiarya/wemo-mcp-server/issues"
 
 ---
 
+## Phase 2: Update References 🔄 ✅ COMPLETED
+
+**Status:** ✅ Completed on February 21, 2026  
+**Execution Time:**~20 minutes  
+**Files Updated:** 9 files modified, 1 file added (uv.lock)
+
+### 2.1 Update `pyproject.toml` ✅
+
+**Lines 46-48: Project URLs**
+```toml
+[project.urls]
+Homepage = "https://github.com/apiarya/wemo-mcp-server"
+Repository = "https://github.com/apiarya/wemo-mcp-server.git"
+Issues = "https://github.com/apiarya/wemo-mcp-server/issues"
+```
+✅ **Completed** - All project URLs updated
+
+### 2.2 Update `server.json` ✅
+
+**Lines 5-7: Repository URL**
+```json
+{
+  "repository": {
+    "url": "https://github.com/apiarya/wemo-mcp-server",
+    "source": "github"
+  }
+}
+```
+✅ **Completed** - Repository URL updated (removed /tree/main/mcp path)
+
+### 2.3 Update `README.md` ✅
+
+**References Updated:**
+- **Line 40:** Image URL → `apiarya/wemo-mcp-server/main/assets/claude-example.png` ✅
+- **Line 370:** Kept as external link to qrussell's repo (parent project reference) ✅
+- **Line 403:** Clone command → `git clone https://github.com/apiarya/wemo-mcp-server.git` ✅
+- **Line 453:** Changed from "Part of" to "Related to" wemo-ops-center project ✅
+
+### 2.4 Update Documentation Files ✅
+
+**CHANGELOG.md:**
+```markdown
+[1.0.1]: https://github.com/apiarya/wemo-mcp-server/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/apiarya/wemo-mcp-server/compare/v0.1.0...v1.0.0
+[0.1.0]: https://github.com/apiarya/wemo-mcp-server/releases/tag/v0.1.0
+```
+✅ **Completed** - Version tags simplified from `mcp-v*` to `v*` format
+
+**RELEASE.md:**
+✅ Updated all 4 GitHub URL references  
+✅ Removed `/mcp` subdirectory paths  
+✅ Changed tag format from `mcp-v*` to `v*`  
+✅ Updated workflow monitoring URLs
+
+**RELEASE_CHECKLIST.md:**
+✅ Updated repo name to `apiarya/wemo-mcp-server`  
+✅ Updated release URL  
+✅ Removed all `mcp/` path prefixes from commands  
+✅ Simplified tag format from `mcp-vX.X.X` to `vX.X.X`
+
+**MCP_REGISTRY_SUBMISSION.md:**
+✅ Updated instructions for new repo owner  
+✅ Added namespace considerations section  
+✅ Documented options for registry namespace (qrussell vs apiarya)  
+✅ Removed `/mcp` subdirectory references
+
+### 2.5 Additional Changes ✅
+
+**.gitignore:**
+✅ Updated to allow `uv.lock` in version control  
+✅ Added comment: "Keep in version control for reproducible builds"
+
+**uv.lock:**
+✅ Copied from original mcp/ directory (285KB)  
+✅ Added to version control for dependency pinning
+
+### Results Summary
+
+**Files Modified:** 8
+- `pyproject.toml`
+- `server.json`
+- `README.md`
+- `CHANGELOG.md`
+- `RELEASE.md`
+- `RELEASE_CHECKLIST.md`
+- `MCP_REGISTRY_SUBMISSION.md`
+- `.gitignore`
+
+**Files Added:** 1
+- `uv.lock`
+
+**Commit:** `5ed36f9`  
+**Lines Changed:** +1484 insertions, -44 deletions  
+**Pushed to:** https://github.com/apiarya/wemo-mcp-server (main branch)
+
+**View Changes:** https://github.com/apiarya/wemo-mcp-server/commit/5ed36f9
+
+---
+
 ## Phase 3: Setup CI/CD & Automation ⚙️
 
 ### 3.1 Update GitHub Actions Workflow
@@ -637,7 +736,7 @@ See [CHANGELOG.md](https://github.com/apiarya/wemo-mcp-server/blob/main/CHANGELO
 **Week 1 (Current):**
 - [x] ✅ Create migration plan document
 - [x] ✅ Execute Phase 1: File migration (COMPLETED Feb 21, 2026 - 5 mins)
-- [ ] Execute Phase 2: Update references
+- [x] ✅ Execute Phase 2: Update references (COMPLETED Feb 21, 2026 - 20 mins)
 - [ ] Execute Phase 3: Setup CI/CD
 
 **Week 2:**
@@ -656,10 +755,11 @@ See [CHANGELOG.md](https://github.com/apiarya/wemo-mcp-server/blob/main/CHANGELO
 
 1. ✅ **Migration Plan Approved** - This document (Feb 21, 2026)
 2. ✅ **Files Migrated** - All code in new repo with preserved history (Feb 21, 2026)
-3. ⏳ **First Release Published** - v1.1.0 on PyPI
-4. ⏳ **Registry Updated** - New URL validated
-5. ⏳ **Original Repo Updated** - Deprecation notices in place
-6. ⏳ **Communication Complete** - All stakeholders notified
+3. ✅ **References Updated** - All URLs point to new repository (Feb 21, 2026)
+4. ⏳ **First Release Published** - v1.1.0 on PyPI
+5. ⏳ **Registry Updated** - New URL validated
+6. ⏳ **Original Repo Updated** - Deprecation notices in place
+7. ⏳ **Communication Complete** - All stakeholders notified
 
 ---
 
@@ -762,6 +862,17 @@ Migration is considered successful when:
 
 ## Notes & Updates
 
+### February 21, 2026 - 4:30 PM
+- ✅ **Phase 2 COMPLETED**
+- Updated all repository references (9 files)
+- Changed 17 URLs from qrussell/wemo-ops-center to apiarya/wemo-mcp-server
+- Simplified versioning: mcp-v* → v*
+- Added uv.lock (285KB) for reproducible builds
+- Removed all /mcp subdirectory references
+- Preserved appropriate external links to parent project
+- Commit 5ed36f9 pushed to apiarya/wemo-mcp-server
+- Ready to proceed with Phase 3: Setup CI/CD
+
 ### February 21, 2026 - 3:30 PM
 - ✅ **Phase 1 COMPLETED**
 - Successfully cloned and filtered git history (15 commits preserved)
@@ -778,6 +889,6 @@ Migration is considered successful when:
 
 ---
 
-**Document Version:** 1.1  
-**Last Updated:** February 21, 2026 - 3:30 PM  
-**Status:** Phase 1 Complete - Ready for Phase 2
+**Document Version:** 1.2  
+**Last Updated:** February 21, 2026 - 4:30 PM  
+**Status:** Phase 2 Complete - Ready for Phase 3
