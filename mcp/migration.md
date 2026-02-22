@@ -245,118 +245,121 @@ Issues = "https://github.com/apiarya/wemo-mcp-server/issues"
 
 ---
 
-## Phase 3: Setup CI/CD & Automation ⚙️
+## Phase 3: Setup CI/CD & Automation ⚙️ ✅ COMPLETED
 
-### 3.1 Update GitHub Actions Workflow
+**Status:** ✅ Completed on February 21, 2026  
+**Execution Time:** ~15 minutes  
+**Files Created:** 2 new files in `.github/`
 
-**`.github/workflows/pypi-publish.yml` Changes:**
+### 3.1 Create GitHub Actions Workflow ✅
 
+**File:** `.github/workflows/pypi-publish.yml`
+
+**Key Changes from Original:**
+- ✅ Tag format: `mcp-v*` → `v*` (e.g., `v1.1.0`)
+- ✅ Removed all `cd mcp` commands (files now at root)
+- ✅ Updated `packages-dir: mcp/dist/` → `dist/`
+- ✅ Simplified version extraction
+- ✅ Updated repository references in summary
+
+**Workflow Configuration:**
 ```yaml
 name: Publish to PyPI
 
 on:
   release:
     types: [published]
-  workflow_dispatch:
+  workflow_dispatch:  # Manual trigger available
 
 jobs:
   publish:
-    # Changed from mcp-v* to v*
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-      - name: Install build dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install build twine
-
-      - name: Extract version from tag
-        id: version
-        run: |
-          # Extract version from tag (e.g., v1.1.0 -> 1.1.0)
-          VERSION=${GITHUB_REF#refs/tags/v}
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Publishing version: $VERSION"
-
-      - name: Verify version matches pyproject.toml
-        run: |
-          # Removed 'cd mcp' - now at root level
-          PYPROJECT_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
-          TAG_VERSION="${{ steps.version.outputs.version }}"
-          if [ "$PYPROJECT_VERSION" != "$TAG_VERSION" ]; then
-            echo "❌ Version mismatch!"
-            echo "   pyproject.toml: $PYPROJECT_VERSION"
-            echo "   Git tag: $TAG_VERSION"
-            exit 1
-          fi
-          echo "✅ Version verified: $PYPROJECT_VERSION"
-
-      - name: Build package
-        run: |
-          # Removed 'cd mcp' - now at root level
-          python -m build
-          echo "📦 Built package:"
-          ls -lh dist/
-
-      - name: Check package
-        run: |
-          # Removed 'cd mcp'
-          twine check dist/*
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist/  # Changed from mcp/dist/
-          print-hash: true
-
-      - name: Create release summary
-        run: |
-          echo "## 🎉 Published to PyPI" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Install command:**" >> $GITHUB_STEP_SUMMARY
-          echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "pip install wemo-mcp-server==${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "# or" >> $GITHUB_STEP_SUMMARY
-          echo "uvx wemo-mcp-server@${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**PyPI page:** https://pypi.org/project/wemo-mcp-server/${{ steps.version.outputs.version }}/" >> $GITHUB_STEP_SUMMARY
+      id-token: write  # For Trusted Publishing
 ```
 
-**Key Changes:**
-- Tag format: `mcp-v*` → `v*`
-- Removed all `cd mcp` commands
-- Updated `packages-dir: dist/` (was `mcp/dist/`)
+**Trigger Conditions:**
+- GitHub release is **published** (not draft)
+- Tag format: `v*.*.*` (e.g., `v1.1.0`, `v1.0.2`)
+- Manual trigger via workflow_dispatch
 
-### 3.2 Setup PyPI Trusted Publishing
+### 3.2 Setup PyPI Trusted Publishing ✅
 
-**Steps:**
-1. Go to https://pypi.org/manage/project/wemo-mcp-server/settings/publishing/
-2. Add new GitHub publisher:
-   - **Owner:** `apiarya`
-   - **Repository:** `wemo-mcp-server`
-   - **Workflow name:** `pypi-publish.yml`
-   - **Environment name:** (leave blank or use `release`)
+**Configuration Status:** ✅ Already Configured
 
-### 3.3 Setup Repository Secrets (Alternative)
+**PyPI Settings:**
+- **Package:** wemo-mcp-server
+- **Owner:** @apiarya
+- **Publishing Method:** Trusted Publishing (OIDC)
+- **Repository:** apiarya/wemo-mcp-server
+- **Workflow:** pypi-publish.yml
+- **Environment:** (Any)
 
-If using token-based publishing instead of trusted publishing:
-- Add `PYPI_API_TOKEN` in repository secrets at:
-  `https://github.com/apiarya/wemo-mcp-server/settings/secrets/actions`
+**Screenshot Confirmed:**
+- ✅ Old publisher (qrussell/wemo-ops-center) visible
+- ✅ New publisher (apiarya/wemo-mcp-server) configured
+- ✅ Ready for first release
+
+**Benefits:**
+- No API tokens needed
+- Short-lived OIDC tokens (expires in minutes)
+- Automatic authentication
+- Linked to specific repo and workflow
+
+### 3.3 Setup Repository Secrets (Alternative) ✅
+
+**Status:** ✅ Not needed - Using Trusted Publishing
+
+Trusted Publishing eliminates the need for `PYPI_API_TOKEN` secret.
+
+### 3.4 Documentation Created ✅
+
+**File:** `.github/PYPI_PUBLISHING.md`
+
+**Contents:**
+- ✅ Configuration overview
+- ✅ How Trusted Publishing works
+- ✅ Pre-release checklist
+- ✅ First release checklist
+- ✅ Post-release verification steps
+- ✅ Troubleshooting guide
+- ✅ Security best practices
+- ✅ Cleanup instructions
+
+### Results Summary
+
+**Files Created:** 2
+- `.github/workflows/pypi-publish.yml` (88 lines)
+- `.github/PYPI_PUBLISHING.md` (232 lines)
+
+**Workflow Features:**
+- ✅ Automated PyPI publishing on release
+- ✅ Version verification (matches pyproject.toml)
+- ✅ Package build and validation
+- ✅ Release summary in GitHub Actions
+- ✅ Manual trigger option for testing
+
+**Commit:** `e496317`  
+**Lines Added:** +232 insertions  
+**Pushed to:** https://github.com/apiarya/wemo-mcp-server (main branch)
+
+**View Changes:** https://github.com/apiarya/wemo-mcp-server/commit/e496317
+
+### Next Steps (Phase 4 Preview)
+
+**Before First Release (v1.1.0):**
+1. Update version numbers in 3 files
+2. Update CHANGELOG.md with migration notes
+3. Commit and push changes
+4. Create tag: `git tag v1.1.0`
+5. Create GitHub release
+
+**After Release:**
+1. Verify PyPI publish
+2. Test installation
+3. Publish to MCP Registry
 
 ---
 
@@ -737,7 +740,7 @@ See [CHANGELOG.md](https://github.com/apiarya/wemo-mcp-server/blob/main/CHANGELO
 - [x] ✅ Create migration plan document
 - [x] ✅ Execute Phase 1: File migration (COMPLETED Feb 21, 2026 - 5 mins)
 - [x] ✅ Execute Phase 2: Update references (COMPLETED Feb 21, 2026 - 20 mins)
-- [ ] Execute Phase 3: Setup CI/CD
+- [x] ✅ Execute Phase 3: Setup CI/CD (COMPLETED Feb 21, 2026 - 15 mins)
 
 **Week 2:**
 - [ ] Execute Phase 4: Test and publish first release
@@ -756,10 +759,11 @@ See [CHANGELOG.md](https://github.com/apiarya/wemo-mcp-server/blob/main/CHANGELO
 1. ✅ **Migration Plan Approved** - This document (Feb 21, 2026)
 2. ✅ **Files Migrated** - All code in new repo with preserved history (Feb 21, 2026)
 3. ✅ **References Updated** - All URLs point to new repository (Feb 21, 2026)
-4. ⏳ **First Release Published** - v1.1.0 on PyPI
-5. ⏳ **Registry Updated** - New URL validated
-6. ⏳ **Original Repo Updated** - Deprecation notices in place
-7. ⏳ **Communication Complete** - All stakeholders notified
+4. ✅ **CI/CD Configured** - PyPI publishing workflow ready (Feb 21, 2026)
+5. ⏳ **First Release Published** - v1.1.0 on PyPI
+6. ⏳ **Registry Updated** - New URL validated
+7. ⏳ **Original Repo Updated** - Deprecation notices in place
+8. ⏳ **Communication Complete** - All stakeholders notified
 
 ---
 
@@ -862,6 +866,17 @@ Migration is considered successful when:
 
 ## Notes & Updates
 
+### February 21, 2026 - 5:00 PM
+- ✅ **Phase 3 COMPLETED**
+- Created GitHub Actions workflow for automated PyPI publishing
+- Configured for Trusted Publishing (OIDC) - no secrets needed
+- Updated tag format from mcp-v* to v*
+- Removed all monorepo path references
+- Created comprehensive documentation (.github/PYPI_PUBLISHING.md)
+- Commit e496317 pushed to apiarya/wemo-mcp-server
+- PyPI publisher already configured (screenshot confirmed)
+- Ready to proceed with Phase 4: First Release
+
 ### February 21, 2026 - 4:30 PM
 - ✅ **Phase 2 COMPLETED**
 - Updated all repository references (9 files)
@@ -889,6 +904,6 @@ Migration is considered successful when:
 
 ---
 
-**Document Version:** 1.2  
-**Last Updated:** February 21, 2026 - 4:30 PM  
-**Status:** Phase 2 Complete - Ready for Phase 3
+**Document Version:** 1.3  
+**Last Updated:** February 21, 2026 - 5:00 PM  
+**Status:** Phase 3 Complete - Ready for Phase 4 (First Release)
