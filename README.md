@@ -3,19 +3,21 @@ Welcome to Wemo Ops. We offer three ways to manage your smart home, depending on
 
 ![Wemo Ops Center Dashboard](assets/wemo-ops.png)
 
-![Version](https://img.shields.io/badge/version-v5.2.3-blue)
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
+![Version](https://img.shields.io/badge/version-v5.3.1-blue)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Raspberry%20Pi-lightgrey)
 [![MCP](https://img.shields.io/badge/MCP-Server-blue)](https://modelcontextprotocol.io)
 [![AI Integration](https://img.shields.io/badge/AI-Integration-purple)](https://modelcontextprotocol.io)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ---
 **Resurrect your hardware.** The Wemo Cloud is dead, but your devices don't have to be.
 
-Wemo Ops Center is a completely local, offline provisioning and automation suite for Belkin Wemo devices. It allows you to setup, control, automate, and factory reset Wemo plugs and switches without needing the official app or a cloud account.
-* Alternative to official Wemo App
-* Provision Wemo Devices with Python
+Wemo Ops Center is a completely local, offline provisioning and automation suite for Belkin Wemo devices. It allows you to set up, control, automate, and factory reset Wemo plugs and switches without needing the official app or a cloud account.
+* Alternative to the official Wemo App
+* Provision Wemo devices with Python
 * Belkin Wemo local control setup
-* Wemo troubleshooting and Wi-Fi profision
+* Wemo troubleshooting and Wi-Fi provisioning
+
+> **New in v5.3.1:** much faster and complete device discovery, builds for Raspberry Pi / ARM Linux and macOS Tahoe, and fixes for the macOS "damaged app" error and the Linux GUI crash on Fedora. See the [v5.3.1 release notes](release-notes/v5.3.1.md).
 
 ## 🚀 Choose Your Edition
 
@@ -23,10 +25,10 @@ Wemo Ops Center is a completely local, offline provisioning and automation suite
 | :--- | :--- | :--- | :--- |
 | **Best For** | Casual users, quick toggling, setup | Power users, Home Labs, 24/7 automation | AI assistant users, MCP developers |
 | **Interface** | Native Window (Python/Tkinter) | Web Dashboard (Browser-based) | AI Assistant (Natural language) |
-| **Running State** | Runs only when open | Runs 24/7 as a background service | Launched on-demand by AI |
-| **OS Support** | Linux (Fedora/Ubuntu), Windows | Linux Server, Raspberry Pi, Docker | Python 3.10+ (Any OS) |
-| **Installation** | Download from Releases | `dnf/apt install` or Docker | `pip install wemo-mcp-server` |
-| **Version** | v5.2.3 | v5.2.3 | v1.0.0 (Stable) |
+| **Running State** | Runs only when open (its background service keeps schedules running) | Runs 24/7 as a background service | Launched on-demand by AI |
+| **OS Support** | Windows, macOS (15+, Apple Silicon & Intel), Linux (Fedora/RHEL/Rocky, Ubuntu/Debian, Raspberry Pi OS) | Linux server, Raspberry Pi, Docker | Python 3.10+ (Any OS) |
+| **Installation** | [Releases page](../../releases) or [`apt`/`dnf` repository](#-installation-linux) | [`apt`/`dnf` repository](#-installation-linux) or [Docker](#-docker) | `pip install wemo-mcp-server` |
+| **Version** | v5.3.1 | v5.3.1 | v1.0.1 (Stable) |
 | **Key Benefit** | **Zero Setup.** Just launch and click. | **Set & Forget.** Automation never stops. | **Universal Protocol.** Works with any MCP host. |
 
 # Wemo Ops Center (Desktop)
@@ -34,9 +36,24 @@ Wemo Ops Center is a completely local, offline provisioning and automation suite
 
 No Python installation required.
 
-1.  **Download:** Go to the [Releases Page](../../releases) and download.
-2.  **Provisioner** Follow the on-screen instructions to scan for and configure your Wemo devices.
-3.  **Dashboard** Scan Network, Control Devices, and Rename Devices.  IP, MAC, FW ver, SN, and HomeKit code are displayed.
+1. **Download:** Go to the [Releases Page](../../releases) and download the file for your system:
+
+   | System | File |
+   |---|---|
+   | Windows 10/11 | `WemoOps_Setup_v5.3.1.exe` |
+   | macOS 15 (Sequoia) or newer, Apple Silicon (M1–M4) | `WemoOps_5.3.1-1_macos15-apple-silicon.dmg` |
+   | macOS 15 (Sequoia) or newer, Intel | `WemoOps_5.3.1-1_macos15-intel.dmg` |
+   | macOS 26 (Tahoe), Apple Silicon | `WemoOps_5.3.1-1_macos26-apple-silicon.dmg` |
+   | macOS 26 (Tahoe), Intel | `WemoOps_5.3.1-1_macos26-intel.dmg` |
+   | Linux | Use the [package repository](#-installation-linux) (recommended), or download the `.deb` / `.rpm` |
+
+2. **Provisioner:** Follow the on-screen instructions to scan for and configure your Wemo devices.
+3. **Dashboard:** Scan Network, Control Devices, and Rename Devices. IP, MAC, FW version, serial number, and HomeKit code are displayed.
+
+Each release includes `SHA256SUMS.txt`. Verify a download with:
+```bash
+sha256sum -c SHA256SUMS.txt --ignore-missing
+```
 
 ## ⚠️ "Windows protected your PC" Warning
 When you launch `WemoOps.exe` for the first time, you may see a blue warning from Microsoft Defender SmartScreen.
@@ -46,7 +63,9 @@ When you launch `WemoOps.exe` for the first time, you may see a blue warning fro
 **To run the app:**
 1. Click **More info**.
 2. Click **Run anyway**.
-The complete control plane for Belkin Wemo devices.
+
+## 🍎 First Launch on macOS
+Open the DMG and run **Install_WemoOps.command**, or drag **WemoOps** to Applications. If macOS asks whether to open an app from an unidentified developer, right-click (or Control-click) **WemoOps** → **Open** → **Open**. You only need to do this once.
 
 # Screenshots of the Wemo Ops Center Desktop App
 <table>
@@ -99,24 +118,25 @@ The complete control plane for Belkin Wemo devices.
     <td><img src="https://github.com/user-attachments/assets/3a13f18e-cfbe-4a2c-be1a-63f13c274019" width="100%"></td>
     <td><img src="https://github.com/user-attachments/assets/18f26f83-a645-485f-bd51-a984cfc99169" width="100%"></td>
   </tr>
-</table>>
+</table>
 
 ---
 **Go to the [Releases Page](../../releases) and download.**
-## 🚀 Key Features (v5.2.3)
+## 🚀 Key Features (v5.3.1)
 
 ### 1. 📡 Universal Provisioner
 * **No Cloud Required:** Connect directly to a new or reset Wemo device's Wi-Fi (`Wemo.Mini.xxx`) and push your Wi-Fi credentials instantly.
 * **Smart Encryption Loop:** Automatically detects and applies the correct encryption method (old vs. new firmware) to ensure successful setup.
 * **Profile Manager:** Save your Wi-Fi SSID and Password to quickly provision multiple devices in seconds.
+* **Automatic Pick-up:** After a successful setup, the app rescans so the device appears on the Dashboard once it joins your network.
 
 ### 2. 🎛️ Network Dashboard & VLAN Support
-* **Scan Network:** Deep scans your local network to find provisioned devices.
-* **VLAN/Subnet Support:** Perfect for IoT setups. You can scan multiple subnets by entering them in a comma-separated list (e.g., `192.168.1.0/24, 10.0.0.0/24`).
-* **Smart Deduplication:** Tracks devices by MAC address to prevent ghost entries when IP addresses change.
-* **Direct Connect:** Manually add a device by IP address if SSDP discovery fails.
+* **Fast, Complete Discovery:** Broadcast (SSDP) discovery shows devices within seconds; a deep scan then finds devices broadcast can't reach.
+* **All Your Networks:** Every network your computer is connected to (e.g. Ethernet and an IoT Wi-Fi) is detected and scanned automatically. VPN, virtual machine and container adapters are skipped.
+* **VLAN/Subnet Support:** Perfect for IoT setups. Save additional subnets (e.g. `192.168.20.0/23`) with the **Save** button and they are scanned too; the selected subnet is scanned first.
+* **Smart Deduplication:** Tracks devices by their unique device ID, so devices that share a name (e.g. several "Wemo Mini") are all listed, labelled with the end of their MAC address.
 
-### 3. 🛠️ Maintenance Tools (New)
+### 3. 🛠️ Maintenance Tools
 Advanced tools to manage device health directly from the app:
 * **Clear Personal Info:** Removes custom names, icons, and rules.
 * **Clear Wi-Fi:** Wipes network credentials to return the device to "Setup Mode" (Flashing Amber/Blue).
@@ -127,8 +147,8 @@ Advanced tools to manage device health directly from the app:
 * **Solar Engine:** Automatically detects your latitude/longitude to trigger lights at **Sunrise** or **Sunset**.
 * **Fixed Schedules:** Set standard time-based schedules (e.g., "Turn ON at 18:00").
 
-### 5. Mobile Web App
-* **Scan the QR Code:** connect to the mobile web app with your phone or tablet and control your Wemo devices.
+### 5. 📱 Mobile Web App
+* **Scan the QR Code:** Connect to the mobile web app with your phone or tablet and control your Wemo devices.
 * **Local Control:** The app runs on your local network and connects directly to Wemo devices without the cloud.
 * **Manage Schedules:** Manage schedules from the mobile web app, solar automation, or time-based schedules.
 
@@ -148,28 +168,90 @@ This project is an independent open-source tool and is not affiliated with, endo
 
 * **Visual Setup:** Easy-to-use interface for renaming and configuring devices.
 
-* **Multi-Platform Support:** run the app on Windows, macOS, Linux, or Docker. 
+* **Multi-Platform Support:** Run the app on Windows, macOS, or Linux (including Raspberry Pi).
 
-## 📦 Installation (Linux):
+## 📦 Installation (Linux)
+
+The recommended way to install on Linux is the **qrussell package repository**. Add it once, and `apt` / `dnf` install and update Wemo Ops like any other package. It provides x86-64 packages and, from v5.3.1, ARM64 packages (Raspberry Pi 4/5 with 64-bit Raspberry Pi OS).
+
+The `wemo-ops` package contains the **Desktop App and the Automation Server**. The server is installed as the `wemo-ops-server` systemd service and starts automatically, with the web dashboard on port `5050`.
+
+### Ubuntu / Debian / Linux Mint / Raspberry Pi OS (`apt`)
+
+**1. Add the repository** (signed; you only do this once):
+```bash
+sudo curl -fsSL https://qrussell.github.io/qrussell-repo/deb/qrussell-repo.gpg -o /usr/share/keyrings/qrussell-repo.gpg
+```
+```bash
+echo "deb [signed-by=/usr/share/keyrings/qrussell-repo.gpg] https://qrussell.github.io/qrussell-repo/deb ./" | sudo tee /etc/apt/sources.list.d/qrussell.list
+```
+Optional: check that the key's fingerprint is `9994A9EB39EB3C101C949FB2012BA14E0FE3A355`:
+```bash
+gpg --show-keys /usr/share/keyrings/qrussell-repo.gpg
+```
+
+**2. Install:**
+```bash
+sudo apt update && sudo apt install wemo-ops
+```
+
+### Fedora / RHEL / Rocky / AlmaLinux (`dnf`)
+
+**1. Add the repository** (you only do this once). Use the command for your `dnf` version:
+
+Fedora 41 and newer (dnf5):
+```bash
+sudo dnf config-manager addrepo --from-repofile=https://qrussell.github.io/qrussell-repo/qrussell.repo
+```
+RHEL / Rocky / AlmaLinux 9 and Fedora 40 or older (dnf 4):
+```bash
+sudo dnf install -y 'dnf-command(config-manager)' && sudo dnf config-manager --add-repo https://qrussell.github.io/qrussell-repo/qrussell.repo
+```
+<details>
+<summary>Or add the repository file by hand (any dnf version)</summary>
 
 ```bash
-sudo dnf install wemo-ops       # Fedora / Rocky
+sudo tee /etc/yum.repos.d/qrussell.repo <<'EOF'
+[qrussell-tools]
+name=Quentin Russell's Tools
+baseurl=https://qrussell.github.io/qrussell-repo/rpm/
+enabled=1
+gpgcheck=0
+EOF
 ```
-### OR
+</details>
+
+**2. Install:**
 ```bash
-sudo apt install wemo-ops       # Ubuntu / Debian
+sudo dnf install wemo-ops
 ```
+
+### Updating
+Updates arrive with your normal system updates:
+```bash
+sudo apt update && sudo apt upgrade   # Ubuntu / Debian
+```
+```bash
+sudo dnf upgrade                      # Fedora / RHEL / Rocky
+```
+
+### Without the repository
+Download the `.deb` or `.rpm` for your architecture from the [Releases Page](../../releases) and install it with `sudo apt install ./wemo-ops_*.deb` or `sudo dnf install ./wemo-ops-*.rpm` (dependencies are installed automatically). You won't receive updates automatically this way.
+
+Repository details and other packages: [qrussell-repo](https://github.com/qrussell/qrussell-repo).
+
 ## ⚙️ Option 2: The Automation Server
 (For Homelabs & Always-On Automation)
 
-Wemo Ops Server is a lightweight, headless service designed to run on a Raspberry Pi, VM, or Home Server. It provides a Web UI accessible from any device on your network and executes automation schedules even when your computer is turned off.  
+Wemo Ops Server is a lightweight, headless service designed to run on a Raspberry Pi, VM, or Home Server. It provides a Web UI accessible from any device on your network and executes automation schedules even when your computer is turned off.
 
 ### Supported deployments:
-* RHEL/Rocky/Fedora [Wemo Ops Server Wiki Page](https://github.com/qrussell/wemo-ops-center/wiki/Wemo-Ops-Server)
-* Debian/Ubuntu [Wemo Ops Server Wiki Page](https://github.com/qrussell/wemo-ops-center/wiki/Wemo-Ops-Server)
-* Docker (see code section [universal-server](https://github.com/qrussell/wemo-ops-center/tree/main/universal-server) )
+* **Linux package (recommended):** install `wemo-ops` from the [package repository](#-installation-linux). It includes the always-on server as the `wemo-ops-server` systemd service. Open `http://<server-ip>:5050` from any device on your network.
+* **Docker:** see [Docker](#-docker) below.
+* More details: [Wemo Ops Server Wiki Page](https://github.com/qrussell/wemo-ops-center/wiki/Wemo-Ops-Server)
 
-Visit the Wemo Ops Server wiki page [Wemo Ops Server Wiki Page](https://github.com/qrussell/wemo-ops-center/wiki/Wemo-Ops-Server)
+The repository also has a separate, headless-only `wemo-ops-server` package (v1.0.2, from the older standalone server). It does not include the v5.3.x discovery improvements; prefer the `wemo-ops` package or Docker.
+
 <table>
   <tr>
     <th width="50%">Dashboard</th>
@@ -186,30 +268,33 @@ Visit the Wemo Ops Server wiki page [Wemo Ops Server Wiki Page](https://github.c
   <tr>
     <td><img width="977" height="1137" alt="automation-dark" src="https://github.com/user-attachments/assets/5b5a59fc-6272-43fd-81f6-d601dec3efd2" /></td>
     <td><img width="1005" height="1136" alt="automation2-dark" src="https://github.com/user-attachments/assets/5eb25162-c369-456c-a7ff-eb303857fde4" /></td>
-</td>
-</tr>
+  </tr>
 </table>
 
 ### Why use this?
 
-* 24/7 Reliability: Your automation schedules (e.g., "Lights on at sunset") run even if your laptop is asleep.
+* **24/7 Reliability:** Your automation schedules (e.g., "Lights on at sunset") run even if your laptop is asleep.
 
-* Any Device Access: Control your home from your phone, tablet, or another PC via the Web Dashboard.
+* **Any Device Access:** Control your home from your phone, tablet, or another PC via the Web Dashboard.
 
-* Low Resource Usage: Optimized to run silently in the background.
+* **Low Resource Usage:** Optimized to run silently in the background.
 
-## 📦 Installation (Linux):
+* **Network Scanning Your Way:** Connected networks are deep-scanned at startup and when you press **Scan**; saved subnets are re-scanned every 5 minutes. Turn on *Deep-scan all connected networks every 5 min* in Settings for continuous scanning of every network.
+
+### 🐳 Docker
+
+The server image `ghcr.io/qrussell/wemo-ops-server` is published with every release for **amd64 and arm64** (Raspberry Pi).
 
 ```bash
-sudo dnf install wemo-ops-server  # Fedora / Rocky
+curl -fsSLO https://raw.githubusercontent.com/qrussell/wemo-ops-center/main/universal-app/docker-compose.yml
 ```
-### OR
 ```bash
-sudo apt install wemo-ops-server  # Ubuntu / Debian
+docker compose up -d
 ```
-## Installation instructions for Wemo Ops Server 
-### Debian/Ubuntu or RHEL/Rocky/Fedora Instructions on the Wiki Page:
-* Visit the Wemo Ops Server wiki page [Wemo Ops Server Wiki Page](https://github.com/qrussell/wemo-ops-center/wiki/Wemo-Ops-Server)
+
+Then open `http://<host-ip>:5050`. Settings, schedules and the device cache are kept in the `wemo-data` volume. Edit `TZ` in `docker-compose.yml` to your time zone so schedules fire at local time.
+
+**Run it on a Linux host** (Raspberry Pi, NAS, VM, server) with `network_mode: host`, as in the compose file: discovery needs direct access to your network. Docker Desktop on Windows/macOS routes container traffic through its own proxy and misses devices; use the desktop app there.
 
 ## 🤖 Option 3: MCP Server
 (For AI Assistant Integration)
@@ -217,7 +302,7 @@ sudo apt install wemo-ops-server  # Ubuntu / Debian
 [![PyPI version](https://badge.fury.io/py/wemo-mcp-server.svg)](https://pypi.org/project/wemo-mcp-server/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
-The **WeMo MCP Server** (v1.0.0) enables natural language control of your WeMo devices through any application that supports the Model Context Protocol (MCP). Works with AI assistants like Claude Desktop, VS Code with GitHub Copilot, Cursor, and other MCP-compatible tools.
+The **WeMo MCP Server** (v1.0.1) enables natural language control of your WeMo devices through any application that supports the Model Context Protocol (MCP). Works with AI assistants like Claude Desktop, VS Code with GitHub Copilot, Cursor, and other MCP-compatible tools.
 
 ![Claude Desktop controlling WeMo devices](https://raw.githubusercontent.com/qrussell/wemo-ops-center/main/mcp/assets/claude-example.png)
 
@@ -229,17 +314,20 @@ The **WeMo MCP Server** (v1.0.0) enables natural language control of your WeMo d
 
 * **Universal Protocol:** Works with any MCP host application, not limited to specific tools.
 
-* **Production Ready:** v1.0.0 stable release with comprehensive documentation.
+* **Production Ready:** Stable v1.0 release with comprehensive documentation.
 
 See the **[Wemo MCP Server Documentation](mcp/README.md)** for full setup and features.
 
 ## 🤝 Better Together: The Hybrid Approach
 "Can I use multiple options?" Yes! All three work together seamlessly.
 
-* Use the **Server** to handle the "boring stuff"—keeping schedules running, monitoring device health, and providing a dashboard for your phone.
+* Use the **Server** to handle the "boring stuff": keeping schedules running, monitoring device health, and providing a dashboard for your phone.
 
 * Use the **Desktop App** on your workstation for rapid control while you work, or for deep configuration tasks like firmware updates or bulk provisioning.
 
 * Use the **MCP Server** with your AI assistant for quick natural language queries and control during development or daily work.
 
 * All applications can run on the same network and control the same devices simultaneously without conflict.
+
+## 🛠️ For Maintainers
+Releases are built automatically by GitHub Actions. See [RELEASING.md](RELEASING.md).

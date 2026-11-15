@@ -183,6 +183,9 @@ jobs:
       run:
         working-directory: .
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: release-notes
       - uses: actions/download-artifact@v4
         with:
           pattern: pkg-*
@@ -203,8 +206,10 @@ jobs:
             echo "Release $TAG exists: replacing its packages"
             gh release upload "$TAG" packages/* --clobber --repo "$GITHUB_REPOSITORY"
           else
+            # Use release-notes/<tag>.md when present, else GitHub's generated notes
+            if [ -f "release-notes/$TAG.md" ]; then NOTES=(--notes-file "release-notes/$TAG.md"); else NOTES=(--generate-notes); fi
             gh release create "$TAG" packages/* --draft --verify-tag \
-              --title "Wemo Ops $TAG" --generate-notes --repo "$GITHUB_REPOSITORY"
+              --title "Wemo Ops $TAG" "${NOTES[@]}" --repo "$GITHUB_REPOSITORY"
           fi
       - name: Summary
         env:
