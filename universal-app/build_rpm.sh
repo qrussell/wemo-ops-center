@@ -2,7 +2,7 @@
 
 # ==============================================================================
 #  WEMO OPS - MASTER BUILDER (RPM / Rocky / Fedora / RHEL)
-#  Version: 5.3.0-Stable
+#  Version: read from wemo_ops_universal.py (see ci/get_version.py)
 # ==============================================================================
 
 set -e
@@ -10,9 +10,6 @@ set -e
 # --- CONFIGURATION ---
 APP_NAME="WemoOps"
 SAFE_NAME="wemo-ops"
-VERSION="5.3.0"
-RELEASE="1"
-ARCH="x86_64"
 SUMMARY="Wemo Ops Center - Automation Server and Client"
 CLIENT_SCRIPT="wemo_ops_universal.py"
 SERVER_SCRIPT="wemo_server.py"
@@ -21,6 +18,14 @@ HOOBS_SCRIPT="hoobs_installer.py"
 # 1. SETUP PATHS
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
+
+# VERSION: single source is VERSION in wemo_ops_universal.py (override with WEMO_VERSION).
+# PKG_RELEASE is the package revision suffix (default 1).
+APP_VERSION="${WEMO_VERSION:-$(python3 ci/get_version.py)}"
+if [ -z "$APP_VERSION" ]; then echo "❌ ERROR: could not read VERSION from wemo_ops_universal.py"; exit 1; fi
+VERSION="$APP_VERSION"
+RELEASE="${PKG_RELEASE:-1}"
+ARCH="${ARCH:-$(uname -m)}"   # x86_64 or aarch64
 
 RPM_TOP_DIR="$SCRIPT_DIR/dist/rpm_build"
 INSTALL_DIR="/opt/$APP_NAME"
@@ -72,7 +77,9 @@ rm -f dist/*.rpm
 
 # A. Build Client (GUI)
 echo "   > Compiling Client ($CLIENT_SCRIPT)..."
-pyinstaller --noconfirm --onefile --windowed \
+# Built from a spec so the X11/font libraries can be left out (the distro's
+# own copies are used; see ci/use_system_x11_libs.py)
+pyi-makespec --onefile --windowed \
     --name "wemo-ops-client" \
     --collect-all customtkinter \
     --collect-all pillow \
@@ -83,6 +90,8 @@ pyinstaller --noconfirm --onefile --windowed \
     --hidden-import PIL._tkinter_finder \
     --hidden-import PIL.ImageTk \
     "$CLIENT_SCRIPT" >/dev/null
+python ci/use_system_x11_libs.py wemo-ops-client.spec
+pyinstaller --noconfirm wemo-ops-client.spec >/dev/null
 
 # B. Build Server (Service)
 echo "   > Compiling Server ($SERVER_SCRIPT)..."
@@ -149,7 +158,12 @@ Source0:        %{name}-%{version}.tar.gz
 BuildArch:      $ARCH
 AutoReqProv:    no
 
-Requires:       python3, python3-tkinter, fontconfig, liberation-sans-fonts
+# The app bundles its own Python and Tk. X11/font libraries come from the
+# system (see ci/use_system_x11_libs.py); soname requires match the package arch.
+Requires:       libX11.so.6()(64bit), libXrender.so.1()(64bit), libXft.so.2()(64bit)
+Requires:       libfontconfig.so.1()(64bit), libfreetype.so.6()(64bit), libharfbuzz.so.0()(64bit)
+Requires:       libpng16.so.16()(64bit), libglib-2.0.so.0()(64bit), libexpat.so.1()(64bit)
+Requires:       fontconfig, liberation-sans-fonts
 
 %description
 Wemo Ops is a complete automation suite for Belkin Wemo devices.

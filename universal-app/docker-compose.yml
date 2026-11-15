@@ -1,3 +1,7 @@
+# Run on a Linux host (Raspberry Pi, NAS, VM, server). network_mode: host is required:
+# Wemo discovery needs direct access to the LAN. Docker Desktop on Windows/macOS routes
+# container traffic through its own VM and proxy, so scans there miss devices; run the
+# desktop app (which includes the server) on those systems instead.
 services:
   wemo-server:
     image: ghcr.io/qrussell/wemo-ops-server:latest

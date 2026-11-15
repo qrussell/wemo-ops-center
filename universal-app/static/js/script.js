@@ -124,13 +124,13 @@ async function toggle(n) {
     btn.className = `btn btn-toggle ${isNowOn ? "on" : ""}`;
     btn.innerText = isNowOn ? "ON" : "OFF";
   }
-  await API.post("toggle/" + n);
+  await API.post("toggle/" + encodeURIComponent(n));
   setTimeout(updateDashboard, 500);
 }
 
 // [NEW] Brightness Function
 async function setBrightness(name, val) {
-    await API.post("brightness/" + name, { level: val });
+    await API.post("brightness/" + encodeURIComponent(name), { level: val });
 }
 
 // --- SCHEDULE LOGIC ---
@@ -185,14 +185,33 @@ async function loadSettings() {
   currentSettings = s;
   if (!currentSettings.subnets) currentSettings.subnets = [];
   renderSubnetList();
+  const pfs = document.getElementById("periodic-full-scan");
+  if (pfs) pfs.checked = !!currentSettings.periodic_full_scan;
+}
+
+async function togglePeriodicFullScan() {
+  const on = document.getElementById("periodic-full-scan").checked;
+  currentSettings.periodic_full_scan = on;
+  await API.post("settings", { periodic_full_scan: on });
 }
 
 function renderSubnetList() {
   const sel = document.getElementById("subnet-select");
-  sel.innerHTML = '<option value="">-- Select Saved Subnet --</option>';
-  currentSettings.subnets.forEach((sub) => {
-    sel.add(new Option(sub, sub));
-  });
+  sel.innerHTML = '<option value="">-- Select Subnet --</option>';
+  // Same list as the desktop app: auto-detected connected networks + saved subnets
+  const connected = (currentSettings.connected_subnets || []).filter(
+    (s) => !currentSettings.subnets.includes(s)
+  );
+  if (connected.length) {
+    const g = document.createElement("optgroup");
+    g.label = "Connected (auto-detected)";
+    connected.forEach((sub) => g.appendChild(new Option(sub, sub)));
+    sel.appendChild(g);
+  }
+  const saved = document.createElement("optgroup");
+  saved.label = "Saved";
+  currentSettings.subnets.forEach((sub) => saved.appendChild(new Option(sub, sub)));
+  sel.appendChild(saved);
 }
 
 function selectSubnet() {
@@ -223,6 +242,10 @@ async function deleteSubnet() {
 
   if (!val) {
     alert("Please select a subnet from the dropdown to delete.");
+    return;
+  }
+  if (!currentSettings.subnets.includes(val)) {
+    alert("This network is auto-detected from the server's connections and is always scanned at startup and on Scan. Only saved subnets can be deleted.");
     return;
   }
 

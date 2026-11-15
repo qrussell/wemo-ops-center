@@ -31,12 +31,13 @@ except Exception as e:
     HAS_QR = False
 
 # --- CONFIGURATION ---
-VERSION = "v5.3.0"
+VERSION = "v5.3.1"
 SERVER_PORT = 5050
 HOOBS_PORT = 8581
 SERVER_URL = f"http://localhost:{SERVER_PORT}"
 HOOBS_URL = f"http://localhost:{HOOBS_PORT}"
-UPDATE_API_URL = "https://api.github.com/repos/qrussell/wemo-ops-center/releases/latest"
+# All recent releases: /releases/latest can return an MCP server release (mcp-v*)
+UPDATE_API_URL = "https://api.github.com/repos/qrussell/wemo-ops-center/releases?per_page=30"
 UPDATE_PAGE_URL = "https://github.com/qrussell/wemo-ops-center/releases"
 
 # --- PATH SETUP ---
@@ -84,6 +85,16 @@ else:
 if getattr(sys, 'frozen', False):
     os.environ['PATH'] += os.pathsep + sys._MEIPASS
 
+# --- STATUS ICONS ---
+# Linux: Tk falls back to the color emoji font for emoji, and libXft before
+# 2.3.5 (e.g. RHEL/Rocky 9) crashes on it ("X Error BadLength ... RenderAddGlyphs").
+# Distros without an emoji font show empty boxes instead. Use symbols every
+# standard font has.
+if sys.platform.startswith("linux"):
+    ICON_OK, ICON_WARN, ICON_DOWNLOAD, ICON_PHONE = "●", "▲", "↓", ""
+else:
+    ICON_OK, ICON_WARN, ICON_DOWNLOAD, ICON_PHONE = "✅", "⚠️", "⬇", "📱 "
+
 # --- STYLING CONSTANTS ---
 COLOR_BG = ("#ebebeb", "#242424")           
 COLOR_SIDEBAR = ("#d6d6d6", "#1a1a1a")      
@@ -110,16 +121,43 @@ FONT_MONO = ("Consolas", 13)
 #  UPDATE MANAGER
 # ==============================================================================
 class UpdateManager:
+    APP_TAG = re.compile(r"^v(\d+(?:\.\d+)*)$")  # app releases only: v5.3.1 (not mcp-v1.0.1)
+
+    @staticmethod
+    def parse_version(text):
+        """'v5.3.1' / '5.3.1' / 'v5.3.1-Server' -> (5, 3, 1); None if not a version."""
+        m = re.match(r"^v?(\d+(?:\.\d+)*)", str(text).strip())
+        return tuple(int(x) for x in m.group(1).split(".")) if m else None
+
+    @staticmethod
+    def is_newer(candidate, current):
+        a, b = UpdateManager.parse_version(candidate), UpdateManager.parse_version(current)
+        if a is None or b is None: return False
+        width = max(len(a), len(b))
+        return a + (0,) * (width - len(a)) > b + (0,) * (width - len(b))
+
+    @staticmethod
+    def newest_release(releases, current_version):
+        """Newest published, non-prerelease app release that is newer than current_version."""
+        best = None
+        for r in releases or []:
+            tag = str(r.get("tag_name", "")).strip()
+            if r.get("draft") or r.get("prerelease") or not UpdateManager.APP_TAG.match(tag): continue
+            if UpdateManager.is_newer(tag, current_version) and (best is None or UpdateManager.is_newer(tag, best)):
+                best = tag
+        return best
+
     @staticmethod
     def check_for_updates(current_version, api_url):
+        """(True, tag) only when a newer app release exists. Running a newer or
+        pre-release build never offers an older version."""
         try:
             response = requests.get(api_url, timeout=3)
             if response.status_code == 200:
                 data = response.json()
-                latest_tag = data.get("tag_name", "").strip()
-                if latest_tag and latest_tag != current_version:
-                    return True, latest_tag
-        except: pass
+                newest = UpdateManager.newest_release(data if isinstance(data, list) else [data], current_version)
+                if newest: return True, newest
+        except Exception: pass
         return False, None
 
 # ==============================================================================
@@ -160,6 +198,21 @@ class APIClient:
 # ==============================================================================
 #  NETWORK UTILS
 # ==============================================================================
+# Adapters that are VPNs, VMs or containers. Their subnets are not the home LAN,
+# and probing e.g. a corporate VPN can trip security monitoring. Users can still
+# add any of these subnets by hand.
+VIRTUAL_ADAPTER_WORDS = ("vmware", "virtualbox", "vbox", "hyper-v", "vethernet", "parallels", "docker",
+    "wsl", "wintun", "openvpn", "tap-windows", "tap adapter", "wireguard", "tailscale", "zerotier",
+    "vpn", "anyconnect", "fortinet", "forticlient", "globalprotect", "pangp", "nordlynx", "npcap",
+    "loopback", "wi-fi direct", "bluetooth")
+VIRTUAL_IFACE_PREFIXES = ("docker", "veth", "br-", "virbr", "vmnet", "vboxnet", "tun", "tap", "wg",
+    "tailscale", "zt", "utun", "awdl", "llw", "lxc", "lxd", "cni", "flannel", "cali", "podman", "bridge1", "anpi", "ipsec", "ppp")
+
+def is_virtual_adapter(adapter):
+    nice = (getattr(adapter, "nice_name", "") or "").lower()
+    name = str(getattr(adapter, "name", "") or "").lower()
+    return any(w in nice for w in VIRTUAL_ADAPTER_WORDS) or name.startswith(VIRTUAL_IFACE_PREFIXES) or nice.startswith(VIRTUAL_IFACE_PREFIXES)
+
 class NetworkUtils:
     @staticmethod
     def get_local_ip():
@@ -175,8 +228,41 @@ class NetworkUtils:
     def get_subnet_cidr():
         try:
             ip = NetworkUtils.get_local_ip()
-            return f"{ip}/24"
+            return str(ipaddress.ip_network(f"{ip}/24", strict=False))
         except: return "192.168.1.0/24"
+
+    @staticmethod
+    def normalize_subnet(s):
+        """'192.168.21.99/23' -> '192.168.20.0/23'; bare IP -> its /24. None if invalid."""
+        try:
+            s = s.strip()
+            if "/" not in s: s += "/24"
+            return str(ipaddress.ip_network(s, strict=False))
+        except Exception: return None
+
+    @staticmethod
+    def get_local_subnets():
+        """Every IPv4 LAN subnet this machine is connected to (VPN/VM adapters
+        skipped), the
+        default-route one first. Skips loopback/link-local; very large networks
+        are clamped to the host's /24 so a scan stays a few seconds."""
+        nets = []
+        default_ip = NetworkUtils.get_local_ip()
+        try:
+            import ifaddr
+            for adapter in ifaddr.get_adapters():
+                if is_virtual_adapter(adapter): continue
+                for ip in adapter.ips:
+                    if not isinstance(ip.ip, str): continue  # IPv6 entries are tuples
+                    addr = ipaddress.ip_address(ip.ip)
+                    if addr.is_loopback or addr.is_link_local: continue
+                    prefix = ip.network_prefix if 22 <= ip.network_prefix <= 30 else 24
+                    net = str(ipaddress.ip_network(f"{ip.ip}/{prefix}", strict=False))
+                    if ip.ip == default_ip: nets.insert(0, net)
+                    else: nets.append(net)
+        except Exception: pass
+        if not nets and default_ip != "127.0.0.1": nets.append(NetworkUtils.get_subnet_cidr())
+        return list(dict.fromkeys(nets))
 
     @staticmethod
     def scan_wifi_networks():
@@ -214,47 +300,145 @@ class NetworkUtils:
             return result == 0
         except: return False
 
-class DeepScanner:
-    def probe_port(self, ip, ports=[49152, 49153, 49154, 49155], timeout=0.6):
-        for port in ports:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(timeout)
-            try: 
-                s.connect((str(ip), port))
-                s.close()
-                return str(ip)
-            except: pass
-            finally: s.close()
-        return None
+WEMO_PORTS = (49153, 49152, 49154, 49155)
 
-    def scan_subnet(self, target_cidr, status_callback=None):
-        found_devices = []
+def _raise_fd_limit():
+    """macOS apps launched from Finder start with a 256 open-file limit (some Linux
+    setups too). The scanner's parallel sockets would exhaust it, and each failed
+    connect would silently look like 'no Wemo here'. Raise it; report what we got."""
+    try:
+        import resource
+    except ImportError:
+        return None  # Windows: no per-process open-file limit for sockets
+    try:
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        want = 4096 if hard == resource.RLIM_INFINITY else min(4096, hard)
+        if soft != resource.RLIM_INFINITY and soft < want:
+            try: resource.setrlimit(resource.RLIMIT_NOFILE, (want, hard)); soft = want
+            except (ValueError, OSError): pass
+        return None if soft == resource.RLIM_INFINITY else soft
+    except Exception:
+        return 256
+
+_FD_LIMIT = _raise_fd_limit()
+# Each worker holds ~1 socket at a time; leave headroom for the GUI/server/pywemo.
+SCAN_WORKERS = 256 if _FD_LIMIT is None else max(16, min(256, (_FD_LIMIT - 64) // 2))
+
+def device_uid(dev):
+    """Stable unique id for a device (friendly names are NOT unique)."""
+    for attr in ("udn", "serial_number", "mac"):
         try:
-            network = ipaddress.ip_network(target_cidr, strict=False)
-            all_hosts = list(network.hosts())
-        except: return []
+            v = getattr(dev, attr)
+            if v and str(v).lower() != "unknown": return str(v)
+        except Exception: pass
+    return f"{dev.host}:{dev.port}"
+
+def label_devices(devs_by_uid):
+    """Map uid->device into label->device. Devices sharing a friendly name
+    (e.g. several un-renamed 'Wemo Mini') get a short MAC/serial suffix so
+    none of them are dropped."""
+    by_name = {}
+    for uid, d in devs_by_uid.items(): by_name.setdefault(d.name, []).append((uid, d))
+    out = {}
+    for name, items in by_name.items():
+        if len(items) == 1:
+            out[name] = items[0][1]; continue
+        for uid, d in items:
+            ident = ""
+            for attr in ("mac", "serial_number"):
+                try: ident = str(getattr(d, attr) or "")
+                except Exception: ident = ""
+                if ident and ident.lower() != "unknown": break
+            else: ident = uid
+            ident = ident.replace(":", "").replace("-", "")
+            out[f"{name} ({ident[-4:].upper()})"] = d
+    return out
+
+class DeepScanner:
+    PROBE_TIMEOUT = 0.8   # TCP connect per ip:port
+    VERIFY_TIMEOUT = 3.0  # quick HTTP check that the host really is a Wemo
+    VERIFY_WORKERS = 32   # HTTP checks run after the connect sweep, with modest parallelism
+
+    def tcp_open(self, ip, port):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.settimeout(self.PROBE_TIMEOUT)
+        try:
+            s.connect((ip, port)); return (ip, port)
+        except Exception:
+            return None
+        finally:
+            s.close()
+
+    def is_wemo(self, ip, port):
+        """Hosts like Windows PCs have 49152+ open (RPC) but never answer HTTP;
+        rejecting them here avoids pywemo's 10s-per-port timeouts. A dropped
+        connection (not a timeout) is retried once."""
+        for attempt in range(2):
+            try:
+                r = requests.get(f"http://{ip}:{port}/setup.xml", timeout=self.VERIFY_TIMEOUT)
+                return "urn:Belkin" in r.text
+            except requests.exceptions.Timeout:
+                return False
+            except Exception:
+                if attempt == 0: time.sleep(0.3)
+        return False
+
+    def probe_port(self, ip, port):
+        """(ip, port) if the port is open AND serves a Belkin setup.xml, else None."""
+        ip = str(ip)
+        return (ip, port) if self.tcp_open(ip, port) and self.is_wemo(ip, port) else None
+
+    def find_wemo_hosts(self, hosts, known_ips=()):
+        """ip -> port of every Wemo among hosts, in two steps:
+        1. TCP connect sweep of all ip:port pairs, highly parallel;
+        2. HTTP check of only the open ports, with few workers.
+        Doing the HTTP check during the sweep missed devices: with hundreds of
+        connects in flight (Docker Desktop NAT, busy routers) the Wemo's small
+        HTTP server timed out. 6 of 7 devices were lost at 256 workers."""
+        open_ports = []
+        def sweep(targets, workers):
+            with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+                open_ports.extend(r for r in executor.map(lambda a: self.tcp_open(*a), targets) if r)
+        # Devices already known (last scan / cache) are checked first, before the
+        # connect burst, so a congested network can't make them disappear.
+        hosts = list(hosts); in_scope = set(hosts)
+        known = [ip for ip in dict.fromkeys(known_ips) if ip in in_scope]
+        if known: sweep([(ip, p) for ip in known for p in WEMO_PORTS], self.VERIFY_WORKERS)
+        known_set = set(known)
+        sweep([(ip, p) for ip in hosts if ip not in known_set for p in WEMO_PORTS], SCAN_WORKERS)
+        wemo_hosts = {}
+        if open_ports:
+            open_ports.sort(key=lambda a: WEMO_PORTS.index(a[1]))  # preferred port first per host
+            with concurrent.futures.ThreadPoolExecutor(max_workers=self.VERIFY_WORKERS) as executor:
+                for (ip, port), ok in zip(open_ports, executor.map(lambda a: self.is_wemo(*a), open_ports)):
+                    if ok: wemo_hosts.setdefault(ip, port)
+        return wemo_hosts
+
+    def scan_subnet(self, target_cidr, status_callback=None, exclude=None, known_ips=()):
+        """target_cidr: one CIDR string or a list of them. exclude: set of IP strings
+        already scanned (overlapping subnets are only probed once)."""
+        cidrs = [target_cidr] if isinstance(target_cidr, str) else list(target_cidr)
+        all_hosts = []
+        seen = set(exclude or ())
+        for cidr in cidrs:
+            try: hosts = ipaddress.ip_network(cidr, strict=False).hosts()
+            except Exception: continue
+            for ip in hosts:
+                ip = str(ip)
+                if ip not in seen: seen.add(ip); all_hosts.append(ip)
+        if not all_hosts: return []
 
         if status_callback: status_callback(f"Probing {len(all_hosts)} IPs (Deep)...")
-        
-        active_ips = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=60) as executor:
-            futures = {executor.submit(self.probe_port, ip): ip for ip in all_hosts}
-            for future in concurrent.futures.as_completed(futures):
-                result = future.result()
-                if result: active_ips.append(result)
 
-        if status_callback: status_callback(f"Verifying {len(active_ips)} hosts...")
-        
-        for ip in active_ips:
-            for port in [49152, 49153, 49154, 49155]:
-                try:
-                    url = f"http://{ip}:{port}/setup.xml"
-                    dev = pywemo.discovery.device_from_description(url)
-                    if dev: 
-                        found_devices.append(dev)
-                        break 
-                except: pass
-        return found_devices
+        wemo_hosts = self.find_wemo_hosts(all_hosts, known_ips)
+
+        if status_callback: status_callback(f"Loading {len(wemo_hosts)} Wemo devices...")
+
+        def load(item):
+            try: return pywemo.discovery.device_from_description(f"http://{item[0]}:{item[1]}/setup.xml")
+            except Exception: return None
+        if not wemo_hosts: return []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
+            return [d for d in executor.map(load, wemo_hosts.items()) if d]
 
 # ==============================================================================
 #  WIFI AUTOMATOR
@@ -326,7 +510,9 @@ class WemoOpsApp(ctk.CTk):
         self.grid_rowconfigure(0, weight=1)
 
         self.api = APIClient() 
+        self._scan_running = False
         self.settings = self.load_json(SETTINGS_FILE, dict)
+        self._settings_snapshot = json.loads(json.dumps(self.settings))
         self.profiles = self.load_json(PROFILE_FILE, dict)
         self.schedules = self.load_json(SCHEDULE_FILE, list) or []
         self.saved_subnets = self.settings.get("subnets", [])
@@ -365,7 +551,7 @@ class WemoOpsApp(ctk.CTk):
         ctk.CTkFrame(self.sidebar, fg_color="transparent").pack(expand=True)
         
         if HAS_QR:
-            ctk.CTkButton(self.sidebar, text="📱 Mobile App", fg_color=COLOR_ACCENT, command=self.show_qr_code).pack(pady=5, padx=10)
+            ctk.CTkButton(self.sidebar, text=f"{ICON_PHONE}Mobile App", fg_color=COLOR_ACCENT, command=self.show_qr_code).pack(pady=5, padx=10)
 
         self.service_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         self.service_frame.pack(side="bottom", fill="x", pady=20, padx=10)
@@ -377,7 +563,7 @@ class WemoOpsApp(ctk.CTk):
         self.btn_start_svc = ctk.CTkButton(self.service_frame, text="▶ Start Service", width=100, fg_color="#2d8a4e", command=self.start_local_server)
         self.btn_start_svc.pack(pady=(5,0), anchor="w")
 
-        self.btn_update = ctk.CTkButton(self.sidebar, text="⬇ Update Available", fg_color=COLOR_UPDATE, 
+        self.btn_update = ctk.CTkButton(self.sidebar, text=f"{ICON_DOWNLOAD} Update Available", fg_color=COLOR_UPDATE, 
                                         font=FONT_BODY, command=lambda: webbrowser.open(UPDATE_PAGE_URL))
         self.btn_update.pack(side="bottom", padx=10, pady=(0, 10))
         self.btn_update.pack_forget()
@@ -418,7 +604,34 @@ class WemoOpsApp(ctk.CTk):
         return t()
         
     def save_json(self, p, d):
+        if p == SETTINGS_FILE and d is self.settings: return self._save_settings()
         with open(p, 'w') as f: json.dump(d, f)
+
+    def _save_settings(self):
+        """settings.json is shared with the background service and the web app.
+        Write only the keys this app changed on top of what is on disk now, so we
+        never undo a change made elsewhere (e.g. subnets edited in the web app)."""
+        changed = {k: v for k, v in self.settings.items() if self._settings_snapshot.get(k, object()) != v}
+        disk = self.load_json(SETTINGS_FILE, dict)
+        disk.update(changed)
+        try:
+            with open(SETTINGS_FILE, 'w') as f: json.dump(disk, f)
+        except Exception as e: print(f"Settings save failed: {e}")
+        self._apply_settings(disk)
+
+    def reload_settings(self):
+        """Pick up changes other components saved to settings.json, keeping any
+        local change that has not been written yet."""
+        disk = self.load_json(SETTINGS_FILE, dict)
+        merged = dict(disk)
+        merged.update({k: v for k, v in self.settings.items() if self._settings_snapshot.get(k, object()) != v})
+        self._apply_settings(merged, snapshot=disk)
+
+    def _apply_settings(self, data, snapshot=None):
+        self.settings.clear(); self.settings.update(data)
+        self._settings_snapshot = json.loads(json.dumps(data if snapshot is None else snapshot))
+        subs = self.settings.get("subnets")
+        self.saved_subnets = subs if isinstance(subs, list) else []
         
     def set_ui_scale(self, s):
         try: ctk.set_widget_scaling(int(str(s).replace("%", ""))/100)
@@ -447,10 +660,10 @@ class WemoOpsApp(ctk.CTk):
         self.api.check_connection()
         try:
             if self.api.connected:
-                self.svc_status.configure(text="✅ RUNNING", text_color="#28a745")
+                self.svc_status.configure(text=f"{ICON_OK} RUNNING", text_color="#28a745")
                 self.btn_start_svc.pack_forget()
             else:
-                self.svc_status.configure(text="⚠️ STOPPED", text_color="orange")
+                self.svc_status.configure(text=f"{ICON_WARN} STOPPED", text_color="orange")
                 self.btn_start_svc.pack(pady=(5,0), anchor="w")
         except: pass
         self.after(5000, self.server_heartbeat)
@@ -476,9 +689,11 @@ class WemoOpsApp(ctk.CTk):
         ctrl = ctk.CTkFrame(head, fg_color="transparent"); ctrl.pack(side="right", anchor="e")
         r1 = ctk.CTkFrame(ctrl, fg_color="transparent"); r1.pack(side="top", anchor="e")
         
-        self.subnet_combo = ctk.CTkComboBox(r1, width=180, values=self.saved_subnets)
+        values = self.refresh_subnet_list()
+        self.subnet_combo = ctk.CTkComboBox(r1, width=180, values=values)
         self.subnet_combo.pack(side="left", padx=2)
-        self.subnet_combo.set(NetworkUtils.get_subnet_cidr())
+        last = self.settings.get("selected_subnet")
+        self.subnet_combo.set(last if last in values else (values[0] if values else NetworkUtils.get_subnet_cidr()))
         
         ctk.CTkButton(r1, text="Save", width=50, fg_color=COLOR_ACCENT, command=self.save_subnet).pack(side="left", padx=2)
         ctk.CTkButton(r1, text="Del", width=50, fg_color=COLOR_DANGER, command=self.delete_subnet).pack(side="left", padx=(2, 10))
@@ -489,50 +704,93 @@ class WemoOpsApp(ctk.CTk):
         
         self.dev_list = ctk.CTkScrollableFrame(f, label_text="Devices", label_text_color=COLOR_TEXT); self.dev_list.pack(fill="both", expand=True)
 
+    def refresh_subnet_list(self):
+        """Network list = every connected subnet (auto-detected on each call, so
+        joining another network adds it) + user-saved subnets. Detected subnets
+        are not written to settings, so they disappear when disconnected."""
+        try: self.reload_settings()
+        except Exception: pass
+        self.detected_subnets = NetworkUtils.get_local_subnets()
+        merged = []
+        for s in self.detected_subnets + self.saved_subnets:
+            n = NetworkUtils.normalize_subnet(s)
+            if n and n not in merged: merged.append(n)
+        return merged
+
     def save_subnet(self):
-        s = self.subnet_combo.get().strip()
-        if s and s not in self.saved_subnets:
+        s = NetworkUtils.normalize_subnet(self.subnet_combo.get())
+        if not s: return self.scan_status.configure(text="Invalid subnet")
+        if s not in [NetworkUtils.normalize_subnet(x) for x in self.saved_subnets]:
             self.saved_subnets.append(s)
             self.settings["subnets"] = self.saved_subnets
             self.save_json(SETTINGS_FILE, self.settings)
-            self.subnet_combo.configure(values=self.saved_subnets)
+            self.subnet_combo.configure(values=self.refresh_subnet_list())
+            self.subnet_combo.set(s)
             self.scan_status.configure(text="Subnet Saved")
             
     def delete_subnet(self):
-        s = self.subnet_combo.get().strip()
-        if s in self.saved_subnets:
-            self.saved_subnets.remove(s)
+        s = NetworkUtils.normalize_subnet(self.subnet_combo.get())
+        saved = [x for x in self.saved_subnets if NetworkUtils.normalize_subnet(x) == s]
+        if saved:
+            for x in saved: self.saved_subnets.remove(x)
             self.settings["subnets"] = self.saved_subnets
             self.save_json(SETTINGS_FILE, self.settings)
-            self.subnet_combo.configure(values=self.saved_subnets)
-            self.subnet_combo.set(NetworkUtils.get_subnet_cidr()) 
+            values = self.refresh_subnet_list()
+            self.subnet_combo.configure(values=values)
+            self.subnet_combo.set(values[0] if values else NetworkUtils.get_subnet_cidr())
             self.scan_status.configure(text="Subnet Deleted")
+        elif s in self.detected_subnets:
+            self.scan_status.configure(text="Connected subnet (auto-detected)")
 
     def run_local_scan(self):
-        subnet = self.subnet_combo.get().strip()
+        if self._scan_running:  # repeated clicks would stack multi-subnet scans
+            self.scan_status.configure(text="Scan already running...")
+            return
+        self._scan_running = True
+        selected = NetworkUtils.normalize_subnet(self.subnet_combo.get())
+        values = self.refresh_subnet_list()
+        if selected and selected not in values: values.insert(0, selected)  # typed but not saved
+        self.subnet_combo.configure(values=values)
+        if selected:
+            self.subnet_combo.set(selected)
+            if self.settings.get("selected_subnet") != selected:
+                self.settings["selected_subnet"] = selected; self.save_json(SETTINGS_FILE, self.settings)
+        others = [n for n in values if n != selected]
         self.scan_status.configure(text="Scanning...")
-        threading.Thread(target=self._scan_task, args=(subnet,), daemon=True).start()
+        threading.Thread(target=self._scan_task, args=(selected, others), daemon=True).start()
 
-    def _scan_task(self, subnet):
+    def _scan_task(self, selected, others=()):
         def log(m): self.after(0, lambda: self.scan_status.configure(text=m))
         try:
+            def publish(by_uid):
+                self.known_devices_map = label_devices(by_uid)
+                self.after(0, self.render_devices)
+                self.after(0, self.update_maint_dropdown)
+                self.after(0, self.update_schedule_dropdown)
+
             log("SSDP Scan...")
-            new_map = {}
-            for d in pywemo.discover_devices(): 
-                new_map[d.name] = d
-            
-            if subnet:
-                log(f"Scanning {subnet}...")
-                deep_devs = self.scanner.scan_subnet(subnet)
-                for d in deep_devs:
-                    new_map[d.name] = d
-            
-            self.known_devices_map = new_map
-            log("Scan Complete") 
-            self.after(0, self.render_devices)
-            self.after(0, self.update_maint_dropdown)
-            self.after(0, self.update_schedule_dropdown)
+            new_map = {}  # keyed by UDN: friendly names can collide
+            for d in pywemo.discover_devices():
+                new_map[device_uid(d)] = d
+            publish(dict(new_map))  # show broadcast results right away
+
+            done = set()
+            # Re-check devices we already know first (see DeepScanner.find_wemo_hosts)
+            known_ips = [d.host for d in list(self.known_devices_map.values()) + list(new_map.values())]
+            # Selected subnet first so its devices show up soonest, then the rest.
+            for label, targets in ((selected, [selected] if selected else []), (f"{len(others)} other subnet(s)", list(others))):
+                if not targets: continue
+                log(f"Scanning {label}...")
+                for d in self.scanner.scan_subnet(targets, status_callback=log, exclude=done, known_ips=known_ips):
+                    new_map.setdefault(device_uid(d), d)
+                for t in targets:
+                    try: done.update(str(ip) for ip in ipaddress.ip_network(t, strict=False).hosts())
+                    except Exception: pass
+                publish(dict(new_map))
+
+            log(f"Scan Complete ({len(new_map)} found)")
         except Exception as e: log(f"Error: {e}")
+        finally: self._scan_running = False
 
     def refresh_network(self):
         self.run_local_scan()
@@ -549,10 +807,11 @@ class WemoOpsApp(ctk.CTk):
             ctk.CTkLabel(self.dev_list, text="No devices found.", text_color=COLOR_TEXT).pack(pady=20)
             return
         
-        for dev in sorted(devs, key=lambda x: x.name):
-            self.build_device_card(dev)
+        for label in current_names:
+            self.build_device_card(self.known_devices_map[label], label)
 
-    def build_device_card(self, dev):
+    def build_device_card(self, dev, label=None):
+        label = label or dev.name
         try: mac = getattr(dev, 'mac', "Unknown")
         except: mac = "Unknown"
         try: serial = getattr(dev, 'serial_number', "Unknown")
@@ -560,12 +819,12 @@ class WemoOpsApp(ctk.CTk):
 
         c = ctk.CTkFrame(self.dev_list, fg_color=COLOR_CARD, border_width=1, border_color=COLOR_FRAME); c.pack(fill="x", pady=5, padx=5)
         t = ctk.CTkFrame(c, fg_color="transparent"); t.pack(fill="x", padx=10, pady=10)
-        ctk.CTkLabel(t, text=dev.name, font=FONT_H2, text_color=COLOR_TEXT).pack(side="left")
+        ctk.CTkLabel(t, text=label, font=FONT_H2, text_color=COLOR_TEXT).pack(side="left")
         
         def tog(d=dev): threading.Thread(target=d.toggle, daemon=True).start()
         sw = ctk.CTkSwitch(t, text="Power", command=tog, text_color=COLOR_TEXT)
         sw.pack(side="right")
-        self.device_switches[dev.name] = sw
+        self.device_switches[label] = sw
         
         try:
             state = dev.get_state(force_update=False)
@@ -583,8 +842,8 @@ class WemoOpsApp(ctk.CTk):
                     try: d.set_brightness(int(val))
                     except: pass
                 threading.Thread(target=t, daemon=True).start()
-                if int(val) > 0: self.device_switches[d.name].select()
-                else: self.device_switches[d.name].deselect()
+                if int(val) > 0: self.device_switches[label].select()
+                else: self.device_switches[label].deselect()
 
             slider = ctk.CTkSlider(dim_frame, from_=0, to=100, command=set_brightness)
             try: slider.set(state if state else 0)
@@ -690,8 +949,8 @@ class WemoOpsApp(ctk.CTk):
             time.sleep(5)
 
     def _update_status_label(self, is_running):
-        if is_running: self.hoobs_status_lbl.configure(text="✅ SERVICE ONLINE", text_color=COLOR_SUCCESS)
-        else: self.hoobs_status_lbl.configure(text="⚠️ SERVICE OFFLINE", text_color="orange")
+        if is_running: self.hoobs_status_lbl.configure(text=f"{ICON_OK} SERVICE ONLINE", text_color=COLOR_SUCCESS)
+        else: self.hoobs_status_lbl.configure(text=f"{ICON_WARN} SERVICE OFFLINE", text_color="orange")
 
     def _update_hoobs_ui(self, is_running):
         for widget in self.install_frame.winfo_children(): widget.pack_forget()
@@ -854,12 +1113,27 @@ class WemoOpsApp(ctk.CTk):
             dev = pywemo.discovery.device_from_description(url)
             if n and hasattr(dev, 'basicevent'): dev.basicevent.ChangeFriendlyName(FriendlyName=n); time.sleep(1)
             for m in [2,1,0]:
-                try: dev.setup(ssid=s, password=p, _encrypt_method=m); self.log_prov("SUCCESS! Rebooting..."); break
+                try:
+                    dev.setup(ssid=s, password=p, _encrypt_method=m); self.log_prov("SUCCESS! Rebooting...")
+                    self.log_prov("Reconnect this PC to your normal network. Rescanning in 60s and 120s...")
+                    self.after(60000, self._post_provision_rescan)
+                    self.after(120000, self._post_provision_rescan)
+                    break
                 except: pass
         except Exception as e: self.log_prov(f"Error: {e}")
         self.prov_btn.configure(state="normal", text="Push Configuration")
 
-    def log_prov(self, m): self.prov_log.insert("end", f"{m}\n"); self.prov_log.see("end")
+    def _post_provision_rescan(self):
+        """A newly provisioned device joins the LAN ~30-90s after setup; pick it up
+        without the user having to hit Scan (and nudge the server too)."""
+        self.run_local_scan()
+        if self.api.connected:
+            def nudge():
+                try: requests.post(f"{SERVER_URL}/api/scan", timeout=2)
+                except Exception: pass
+            threading.Thread(target=nudge, daemon=True).start()
+
+    def log_prov(self, m):self.prov_log.insert("end", f"{m}\n"); self.prov_log.see("end")
     
     def scan_ssids(self):
         for w in self.ssid_list.winfo_children(): w.destroy()
@@ -957,7 +1231,7 @@ class WemoOpsApp(ctk.CTk):
         threading.Thread(target=task, daemon=True).start()
 
     def update_schedule_dropdown(self):
-        names = sorted([d.name for d in self.known_devices_map.values()])
+        names = sorted(self.known_devices_map.keys())
         if names: self.sched_dev_combo.configure(values=names); self.sched_dev_combo.set(names[0])
 
     def add_job(self):
@@ -1024,12 +1298,12 @@ class WemoOpsApp(ctk.CTk):
         ctk.CTkButton(c3, text="Factory Reset (2)", fg_color=COLOR_MAINT_BTN_R, text_color="#ffffff", command=lambda: self.run_reset_command(2)).pack(pady=15)
 
     def update_maint_dropdown(self):
-        names = sorted([d.name for d in self.known_devices_map.values()])
+        names = sorted(self.known_devices_map.keys())
         if names: self.maint_dev_combo.configure(values=names); self.maint_dev_combo.set(names[0])
             
     def run_reset_command(self, reset_code):
         name = self.maint_dev_combo.get()
-        dev = next((d for d in self.known_devices_map.values() if d.name == name), None)
+        dev = self.known_devices_map.get(name)
         if not dev: return messagebox.showerror("Error", "Device not found.")
         if not messagebox.askyesno("Confirm Reset", f"Reset '{name}' (Code {reset_code})?"): return
         def task():
@@ -1051,7 +1325,23 @@ class WemoOpsApp(ctk.CTk):
         ctk.CTkLabel(r2, text="UI Scaling:", font=FONT_BODY, text_color=COLOR_TEXT).pack(side="left")
         ctk.CTkComboBox(r2, values=["80%", "90%", "100%", "110%", "120%", "150%"], command=self.change_scaling, variable=ctk.StringVar(value=self.settings.get("scale", "100%")), width=150).pack(side="right")
 
+        r3 = ctk.CTkFrame(c, fg_color="transparent"); r3.pack(fill="x", padx=20, pady=(10, 0))
+        ctk.CTkLabel(r3, text="Deep-scan all connected networks every 5 min:", font=FONT_BODY, text_color=COLOR_TEXT).pack(side="left")
+        self.periodic_scan_var = ctk.BooleanVar(value=bool(self.settings.get("periodic_full_scan", False)))
+        ctk.CTkSwitch(r3, text="", variable=self.periodic_scan_var, command=self.change_periodic_full_scan).pack(side="right")
+        ctk.CTkLabel(c, text="Background service. Off: connected networks are deep-scanned at startup and on Scan; saved subnets every 5 min.",
+                     font=("Arial", 11), text_color=COLOR_SUBTEXT, wraplength=600, justify="left").pack(anchor="w", padx=20, pady=(0, 10))
+
     def change_theme(self, m): ctk.set_appearance_mode(m); self.settings["theme"]=m; self.save_json(SETTINGS_FILE, self.settings)
+    def change_periodic_full_scan(self):
+        on = bool(self.periodic_scan_var.get())
+        self.settings["periodic_full_scan"] = on; self.save_json(SETTINGS_FILE, self.settings)
+        if self.api.connected:  # server may keep its settings elsewhere (e.g. Linux service, Docker)
+            def push():
+                try: requests.post(f"{SERVER_URL}/api/settings", json={"periodic_full_scan": on}, timeout=2)
+                except Exception: pass
+            threading.Thread(target=push, daemon=True).start()
+
     def change_scaling(self, s): self.set_ui_scale(s); self.settings["scale"]=s; self.save_json(SETTINGS_FILE, self.settings)
 
     def show_qr_code(self):
@@ -1068,7 +1358,7 @@ class WemoOpsApp(ctk.CTk):
 
     def run_update_check(self):
         h, n = UpdateManager.check_for_updates(VERSION, UPDATE_API_URL)
-        if h: self.after(0, lambda: self.btn_update.configure(text=f"⬇ Get {n}") or self.btn_update.pack(side="bottom", padx=10, pady=(0, 10)))
+        if h: self.after(0, lambda: self.btn_update.configure(text=f"{ICON_DOWNLOAD} Get {n}") or self.btn_update.pack(side="bottom", padx=10, pady=(0, 10)))
 
     def start_local_server(self):
         cmd = [SERVICE_EXE_PATH] if SERVICE_EXE_PATH and os.path.exists(SERVICE_EXE_PATH) else [sys.executable, "wemo_server.py"]

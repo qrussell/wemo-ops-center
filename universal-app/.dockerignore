@@ -27,3 +27,6 @@ __pycache__/
 
 # Docs
 *.md
+
+# Release tooling (not needed in the image)
+ci/
