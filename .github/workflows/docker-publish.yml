@@ -1,15 +1,19 @@
 name: Build and Push Docker Image
 
+# Publishes ghcr.io/<owner>/wemo-ops-server when a GitHub release is published,
+# so the image always matches the released desktop/server code. (Previously it
+# only rebuilt when the Dockerfile changed on main, so server changes could sit
+# unpublished.) Can also be run manually from the Actions tab.
+
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'universal-app/Dockerfile'
+  release:
+    types: [published]
+  workflow_dispatch:
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    if: github.repository == 'qrussell/wemo-ops-center'
+    if: github.repository == 'qrussell/wemo-ops-center' && !startsWith(github.event.release.tag_name || github.ref_name, 'mcp-')
     permissions:
       contents: read
       packages: write
@@ -17,13 +21,29 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # On a release event this is the release tag; on manual runs the selected ref
+          ref: ${{ github.event.release.tag_name || github.ref }}
 
-      - name: Extract version from Dockerfile LABEL
+      - name: Determine version
         id: version
         run: |
-          VERSION=$(grep 'org.opencontainers.image.version' universal-app/Dockerfile | sed 's/.*version="\([^"]*\)".*/\1/')
+          TAG="${{ github.event.release.tag_name }}"
+          if [ -n "$TAG" ]; then
+            # Tag, app, server and Dockerfile label must agree
+            python3 universal-app/ci/get_version.py --check "$TAG"
+          fi
+          VERSION=$(python3 universal-app/ci/get_version.py)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Extracted version: $VERSION"
+          echo "Version: $VERSION"
+
+      # amd64 + arm64 (Raspberry Pi 4/5, ARM NAS/VMs): the README recommends
+      # running the server on a Pi, so the image must not be x86-only.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -36,7 +56,9 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./universal-app
+          platforms: linux/amd64,linux/arm64
           push: true
+          # Pre-releases get only their version tag; full releases also move :latest
           tags: |
             ghcr.io/${{ github.repository_owner }}/wemo-ops-server:${{ steps.version.outputs.version }}
-            ghcr.io/${{ github.repository_owner }}/wemo-ops-server:latest
+            ${{ !github.event.release.prerelease && format('ghcr.io/{0}/wemo-ops-server:latest', github.repository_owner) || '' }}

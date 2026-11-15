@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-RUN pip install --no-cache-dir flask requests pywemo waitress
+RUN pip install --no-cache-dir flask requests "pywemo>=2.1.1" waitress
 
 # Stage 2: Runtime
 FROM python:3.11-slim
@@ -37,7 +37,8 @@ COPY wemo_server.py .
 COPY templates templates
 COPY static static
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+# Strip CRLF in case the image is built from a Windows checkout
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 
 RUN mkdir -p /data
 

@@ -1,0 +1,231 @@
+name: Release Build
+
+# Push a tag like v5.3.1  -> build every package and attach them to a DRAFT release.
+#                           Nothing is visible to users (or the app's update check)
+#                           until you review the draft and click "Publish release".
+# Run manually (Actions tab) -> dry run: build every package as workflow artifacts only.
+#
+# See RELEASING.md for the full process.
+#
+# Runners: GitHub-hosted by default. To build a platform on your own machine,
+# register a self-hosted runner with a custom label and set the matching
+# repository variable (Settings > Secrets and variables > Actions > Variables):
+#   RUNNER_WINDOWS, RUNNER_DEB_AMD64, RUNNER_DEB_ARM64, RUNNER_RPM_X64,
+#   RUNNER_RPM_ARM64, RUNNER_MACOS_ARM, RUNNER_MACOS_INTEL,
+#   RUNNER_MACOS26_ARM, RUNNER_MACOS26_INTEL
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: universal-app
+
+jobs:
+  version:
+    name: Check version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            # Tag, desktop app, server and Dockerfile label must all agree
+            python3 ci/get_version.py --check "$GITHUB_REF_NAME"
+          fi
+          echo "version=$(python3 ci/get_version.py)" >> "$GITHUB_OUTPUT"
+
+  windows:
+    name: Windows installer
+    needs: version
+    runs-on: ${{ vars.RUNNER_WINDOWS || 'windows-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup --no-progress -y
+          }
+      - name: Build
+        shell: cmd
+        run: build_windows.bat
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pkg-windows
+          path: universal-app/dist/WemoOps_Setup_v*.exe
+          if-no-files-found: error
+
+  deb:
+    name: Debian/Ubuntu package (${{ matrix.arch }})
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Built on 22.04 (glibc 2.35) so the binaries also run on Debian 12,
+          # Raspberry Pi OS (bookworm) and newer Ubuntu releases.
+          - { arch: amd64, runner: "${{ vars.RUNNER_DEB_AMD64 || 'ubuntu-22.04' }}" }
+          - { arch: arm64, runner: "${{ vars.RUNNER_DEB_ARM64 || 'ubuntu-22.04-arm' }}" }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y python3-venv python3-tk python3-dev binutils dpkg-dev
+      - name: Build
+        run: bash build_deb.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pkg-deb-${{ matrix.arch }}
+          path: universal-app/dist/*.deb
+          if-no-files-found: error
+
+  rpm:
+    name: RHEL/Rocky/Fedora package (${{ matrix.arch }})
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Rocky Linux 9 (glibc 2.34): runs on RHEL/Rocky/Alma 9+ and current Fedora
+          # A self-hosted runner here needs Docker or Podman (the build runs in the container)
+          - { arch: x86_64, runner: "${{ vars.RUNNER_RPM_X64 || 'ubuntu-24.04' }}" }
+          - { arch: aarch64, runner: "${{ vars.RUNNER_RPM_ARM64 || 'ubuntu-24.04-arm' }}" }
+    runs-on: ${{ matrix.runner }}
+    container: rockylinux:9
+    steps:
+      - name: Install build tools
+        working-directory: /
+        run: dnf install -y python3 python3.11 python3.11-devel python3.11-tkinter rpm-build binutils findutils tar gzip which git
+      - uses: actions/checkout@v4
+      - name: Build
+        run: bash build_rpm.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pkg-rpm-${{ matrix.arch }}
+          path: universal-app/dist/*.rpm
+          if-no-files-found: error
+
+  macos:
+    name: macOS DMG (${{ matrix.label }})
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS 15 builds run on macOS 15 and newer; macOS 26 (Tahoe) builds are
+          # native Tahoe builds. The DMG name comes from the build machine, e.g.
+          # WemoOps_<ver>-1_macos26-apple-silicon.dmg
+          - { label: macos15-apple-silicon, runner: "${{ vars.RUNNER_MACOS_ARM || 'macos-15' }}" }
+          - { label: macos15-intel, runner: "${{ vars.RUNNER_MACOS_INTEL || 'macos-15-intel' }}" }
+          - { label: macos26-apple-silicon, runner: "${{ vars.RUNNER_MACOS26_ARM || 'macos-26' }}" }
+          - { label: macos26-intel, runner: "${{ vars.RUNNER_MACOS26_INTEL || 'macos-26-intel' }}" }
+    runs-on: ${{ matrix.runner }}
+    env:
+      # Optional. Without these the app is ad-hoc signed: it opens after
+      # right-click > Open instead of being reported as "damaged".
+      MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+      MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      MAC_SIGN_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
+      NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+      NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+      NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Import Developer ID certificate
+        if: env.MACOS_CERT_P12_BASE64 != ''
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PW="$(uuidgen)"
+          echo "$MACOS_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MACOS_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PW" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+      - name: Build
+        run: bash build_mac.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pkg-macos-${{ matrix.label }}
+          path: universal-app/dist/*.dmg
+          if-no-files-found: error
+
+  release:
+    name: Draft GitHub release
+    needs: [version, windows, deb, rpm, macos]
+    # Runs even if one platform failed, so the draft gets everything that did
+    # build; the job summary lists anything missing. Never runs for dry runs.
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') && needs.version.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pkg-*
+          path: packages
+          merge-multiple: true
+      - name: Checksums
+        run: |
+          cd packages
+          ls -la
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: Create or update draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG exists: replacing its packages"
+            gh release upload "$TAG" packages/* --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" packages/* --draft --verify-tag \
+              --title "Wemo Ops $TAG" --generate-notes --repo "$GITHUB_REPOSITORY"
+          fi
+      - name: Summary
+        env:
+          RESULTS: >-
+            windows=${{ needs.windows.result }}
+            deb=${{ needs.deb.result }}
+            rpm=${{ needs.rpm.result }}
+            macos=${{ needs.macos.result }}
+        run: |
+          {
+            echo "## Draft release ${GITHUB_REF_NAME}"
+            echo
+            echo "| Platform | Build |"
+            echo "|---|---|"
+            for r in $RESULTS; do echo "| ${r%%=*} | ${r#*=} |"; done
+            echo
+            echo "Packages attached:"
+            echo '```'
+            ls -1 packages
+            echo '```'
+            echo "Review the draft on the Releases page, then **Publish release**."
+            echo "Publishing triggers the Docker image build."
+          } >> "$GITHUB_STEP_SUMMARY"
+          case "$RESULTS" in *failure*|*cancelled*) echo "::warning::Some platform builds did not succeed; the draft is missing those packages." ;; esac

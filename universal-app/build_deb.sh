@@ -2,7 +2,7 @@
 
 # ==============================================================================
 #  WEMO OPS - MASTER BUILDER (DEB / Debian / Ubuntu / Linux Mint)
-#  Version: 5.3.1-Stable
+#  Version: read from wemo_ops_universal.py (see ci/get_version.py)
 # ==============================================================================
 
 # --- CRITICAL: Stop immediately if any command fails ---
@@ -11,8 +11,6 @@ set -e
 # --- CONFIGURATION ---
 APP_NAME="WemoOps"
 SAFE_NAME="wemo-ops"
-VERSION="5.3.1-1"
-ARCH="amd64"     # Change to 'arm64' if building on Raspberry Pi
 MAINTAINER="Quentin Russell <quentin@quentinrussell.com>"
 DESC="Wemo Ops Center - Automation Server and Client"
 CLIENT_SCRIPT="wemo_ops_universal.py"
@@ -22,6 +20,14 @@ HOOBS_SCRIPT="hoobs_installer.py"
 # 1. SETUP PATHS
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
+
+# VERSION: single source is VERSION in wemo_ops_universal.py (override with WEMO_VERSION).
+# PKG_RELEASE is the package revision suffix (default 1).
+APP_VERSION="${WEMO_VERSION:-$(python3 ci/get_version.py)}"
+if [ -z "$APP_VERSION" ]; then echo "❌ ERROR: could not read VERSION from wemo_ops_universal.py"; exit 1; fi
+VERSION="${APP_VERSION}-${PKG_RELEASE:-1}"
+# Package architecture of the build machine (amd64 on PCs, arm64 on Raspberry Pi 4/5)
+ARCH="${ARCH:-$(dpkg --print-architecture 2>/dev/null || echo amd64)}"
 
 # Define where we will stage the files before zipping
 STAGING_DIR="dist/deb_staging"
@@ -60,7 +66,9 @@ rm -rf build/ dist/deb_staging dist/*.deb
 
 # A. Build Client (GUI)
 echo "   > Compiling Client ($CLIENT_SCRIPT)..."
-pyinstaller --noconfirm --onefile --windowed \
+# Built from a spec so the X11/font libraries can be left out (the distro's
+# own copies are used; see ci/use_system_x11_libs.py)
+pyi-makespec --onefile --windowed \
     --name "wemo-ops-client" \
     --collect-all customtkinter \
     --collect-all pillow \
@@ -71,6 +79,8 @@ pyinstaller --noconfirm --onefile --windowed \
     --hidden-import PIL._tkinter_finder \
     --hidden-import PIL.ImageTk \
     "$CLIENT_SCRIPT" >/dev/null
+python ci/use_system_x11_libs.py wemo-ops-client.spec
+pyinstaller --noconfirm wemo-ops-client.spec >/dev/null
 
 # B. Build Server (Service)
 echo "   > Compiling Server ($SERVER_SCRIPT)..."
@@ -176,7 +186,7 @@ Priority: optional
 Architecture: $ARCH
 Maintainer: $MAINTAINER
 Installed-Size: $SIZE
-Depends: python3, python3-tk, fontconfig
+Depends: libx11-6, libxrender1, libxft2, libfontconfig1, libfreetype6, libharfbuzz0b, libpng16-16 | libpng16-16t64, libglib2.0-0 | libglib2.0-0t64, libexpat1, fontconfig, fonts-liberation
 Description: $DESC
  Wemo Ops is a complete automation suite for Belkin Wemo devices.
 CTRL
