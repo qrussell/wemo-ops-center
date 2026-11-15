@@ -198,22 +198,63 @@ def get_local_subnets():
 class DeepScanner:
     PROBE_TIMEOUT = 0.8   # TCP connect per ip:port
     VERIFY_TIMEOUT = 3.0  # quick HTTP check that the host really is a Wemo
+    VERIFY_WORKERS = 32   # HTTP checks run after the connect sweep, with modest parallelism
+
+    def tcp_open(self, ip, port):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.settimeout(self.PROBE_TIMEOUT)
+        try:
+            s.connect((ip, port)); return (ip, port)
+        except Exception:
+            return None
+        finally:
+            s.close()
+
+    def is_wemo(self, ip, port):
+        """Hosts like Windows PCs have 49152+ open (RPC) but never answer HTTP;
+        rejecting them here avoids pywemo's 10s-per-port timeouts. A dropped
+        connection (not a timeout) is retried once."""
+        for attempt in range(2):
+            try:
+                r = requests.get(f"http://{ip}:{port}/setup.xml", timeout=self.VERIFY_TIMEOUT)
+                return "urn:Belkin" in r.text
+            except requests.exceptions.Timeout:
+                return False
+            except Exception:
+                if attempt == 0: time.sleep(0.3)
+        return False
 
     def probe_port(self, ip, port):
-        """Return (ip, port) only if the port is open AND serves a Belkin setup.xml.
-        Hosts like Windows PCs have 49152+ open (RPC) but never answer HTTP;
-        rejecting them here avoids pywemo's 10s-per-port timeouts."""
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.settimeout(self.PROBE_TIMEOUT)
-        try: s.connect((ip, port))
-        except Exception: return None
-        finally: s.close()
-        try:
-            r = requests.get(f"http://{ip}:{port}/setup.xml", timeout=self.VERIFY_TIMEOUT)
-            if "urn:Belkin" in r.text: return (ip, port)
-        except Exception: pass
-        return None
+        """(ip, port) if the port is open AND serves a Belkin setup.xml, else None."""
+        ip = str(ip)
+        return (ip, port) if self.tcp_open(ip, port) and self.is_wemo(ip, port) else None
 
-    def scan_subnet(self, subnets):
+    def find_wemo_hosts(self, hosts, known_ips=()):
+        """ip -> port of every Wemo among hosts, in two steps:
+        1. TCP connect sweep of all ip:port pairs, highly parallel;
+        2. HTTP check of only the open ports, with few workers.
+        Doing the HTTP check during the sweep missed devices: with hundreds of
+        connects in flight (Docker Desktop NAT, busy routers) the Wemo's small
+        HTTP server timed out. 6 of 7 devices were lost at 256 workers."""
+        open_ports = []
+        def sweep(targets, workers):
+            with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+                open_ports.extend(r for r in executor.map(lambda a: self.tcp_open(*a), targets) if r)
+        # Devices already known (last scan / cache) are checked first, before the
+        # connect burst, so a congested network can't make them disappear.
+        hosts = list(hosts); in_scope = set(hosts)
+        known = [ip for ip in dict.fromkeys(known_ips) if ip in in_scope]
+        if known: sweep([(ip, p) for ip in known for p in WEMO_PORTS], self.VERIFY_WORKERS)
+        known_set = set(known)
+        sweep([(ip, p) for ip in hosts if ip not in known_set for p in WEMO_PORTS], SCAN_WORKERS)
+        wemo_hosts = {}
+        if open_ports:
+            open_ports.sort(key=lambda a: WEMO_PORTS.index(a[1]))  # preferred port first per host
+            with concurrent.futures.ThreadPoolExecutor(max_workers=self.VERIFY_WORKERS) as executor:
+                for (ip, port), ok in zip(open_ports, executor.map(lambda a: self.is_wemo(*a), open_ports)):
+                    if ok: wemo_hosts.setdefault(ip, port)
+        return wemo_hosts
+
+    def scan_subnet(self, subnets, known_ips=()):
         import pywemo
         all_hosts = []
         for subnet in subnets:
@@ -224,12 +265,7 @@ class DeepScanner:
             except: pass
         all_hosts = list(dict.fromkeys(all_hosts))  # overlapping subnets: probe once
         if not all_hosts: return []
-        wemo_hosts = {}
-        with concurrent.futures.ThreadPoolExecutor(max_workers=SCAN_WORKERS) as executor:
-            futures = [executor.submit(self.probe_port, ip, p) for ip in all_hosts for p in WEMO_PORTS]
-            for future in concurrent.futures.as_completed(futures):
-                result = future.result()
-                if result: wemo_hosts.setdefault(result[0], result[1])
+        wemo_hosts = self.find_wemo_hosts(all_hosts, known_ips)
         if not wemo_hosts: return []
         def load(item):
             try: return pywemo.discovery.device_from_description(f"http://{item[0]}:{item[1]}/setup.xml")
@@ -307,7 +343,7 @@ def run_scan_cycle(full=False):
     LAN subnet. Periodic cycles only deep-scan saved subnets, unless the user turned
     on settings["periodic_full_scan"] (off by default)."""
     global scan_status, device_registry, settings
-    if scan_status != "Idle": return
+    if scan_status not in ("Idle", "Error"): return  # a failed scan must not block later ones
     try:
         scan_status = "Scanning..."
         import pywemo
@@ -321,7 +357,8 @@ def run_scan_cycle(full=False):
             subs = list(dict.fromkeys(subs + get_local_subnets()))
         if subs:
             scan_status = "Deep Scanning..."
-            deep_devs = ds.scan_subnet(subs)
+            known_ips = [e.get("ip") for e in list(device_registry.values()) if e.get("ip")]
+            deep_devs = ds.scan_subnet(subs, known_ips=known_ips)
             for dev in deep_devs: register_device(dev)
         now = time.time()
         to_remove = [k for k, d in list(device_registry.items()) if (now - d.get("last_seen", 0)) > 900]
@@ -451,18 +488,22 @@ def api_brightness(name):
 @app.route('/api/settings', methods=['GET', 'POST'])
 def api_settings():
     global settings
-    if request.method == 'GET': return jsonify(settings)
+    if request.method == 'GET':
+        # connected_subnets is informational (auto-detected, never saved), so the
+        # web UI can show the same network list as the desktop app.
+        return jsonify({**settings, "connected_subnets": get_local_subnets()})
     if request.method == 'POST':
         # Merge onto the file, not our in-memory copy, so keys the desktop app
         # saved since we last read it (theme, scale, ...) are not reverted.
-        disk = load_json(SETTINGS_FILE, {}); disk.update(request.json or {})
+        update = dict(request.json or {}); update.pop("connected_subnets", None)
+        disk = load_json(SETTINGS_FILE, {}); disk.update(update)
         save_json(SETTINGS_FILE, disk); settings.update(disk)
         return jsonify({"status": "saved"})
 
 @app.route('/api/scan', methods=['POST'])
 def api_scan():
     global scan_status
-    if scan_status != "Idle": return jsonify({"status": "busy"})
+    if scan_status not in ("Idle", "Error"): return jsonify({"status": "busy"})
     threading.Thread(target=run_scan_cycle, kwargs={"full": True}, daemon=True).start()
     return jsonify({"status": "started"})
 

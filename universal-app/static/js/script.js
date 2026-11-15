@@ -197,10 +197,21 @@ async function togglePeriodicFullScan() {
 
 function renderSubnetList() {
   const sel = document.getElementById("subnet-select");
-  sel.innerHTML = '<option value="">-- Select Saved Subnet --</option>';
-  currentSettings.subnets.forEach((sub) => {
-    sel.add(new Option(sub, sub));
-  });
+  sel.innerHTML = '<option value="">-- Select Subnet --</option>';
+  // Same list as the desktop app: auto-detected connected networks + saved subnets
+  const connected = (currentSettings.connected_subnets || []).filter(
+    (s) => !currentSettings.subnets.includes(s)
+  );
+  if (connected.length) {
+    const g = document.createElement("optgroup");
+    g.label = "Connected (auto-detected)";
+    connected.forEach((sub) => g.appendChild(new Option(sub, sub)));
+    sel.appendChild(g);
+  }
+  const saved = document.createElement("optgroup");
+  saved.label = "Saved";
+  currentSettings.subnets.forEach((sub) => saved.appendChild(new Option(sub, sub)));
+  sel.appendChild(saved);
 }
 
 function selectSubnet() {
@@ -231,6 +242,10 @@ async function deleteSubnet() {
 
   if (!val) {
     alert("Please select a subnet from the dropdown to delete.");
+    return;
+  }
+  if (!currentSettings.subnets.includes(val)) {
+    alert("This network is auto-detected from the server's connections and is always scanned at startup and on Scan. Only saved subnets can be deleted.");
     return;
   }
 

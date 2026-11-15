@@ -36,7 +36,8 @@ SERVER_PORT = 5050
 HOOBS_PORT = 8581
 SERVER_URL = f"http://localhost:{SERVER_PORT}"
 HOOBS_URL = f"http://localhost:{HOOBS_PORT}"
-UPDATE_API_URL = "https://api.github.com/repos/qrussell/wemo-ops-center/releases/latest"
+# All recent releases: /releases/latest can return an MCP server release (mcp-v*)
+UPDATE_API_URL = "https://api.github.com/repos/qrussell/wemo-ops-center/releases?per_page=30"
 UPDATE_PAGE_URL = "https://github.com/qrussell/wemo-ops-center/releases"
 
 # --- PATH SETUP ---
@@ -84,6 +85,16 @@ else:
 if getattr(sys, 'frozen', False):
     os.environ['PATH'] += os.pathsep + sys._MEIPASS
 
+# --- STATUS ICONS ---
+# Linux: Tk falls back to the color emoji font for emoji, and libXft before
+# 2.3.5 (e.g. RHEL/Rocky 9) crashes on it ("X Error BadLength ... RenderAddGlyphs").
+# Distros without an emoji font show empty boxes instead. Use symbols every
+# standard font has.
+if sys.platform.startswith("linux"):
+    ICON_OK, ICON_WARN, ICON_DOWNLOAD, ICON_PHONE = "●", "▲", "↓", ""
+else:
+    ICON_OK, ICON_WARN, ICON_DOWNLOAD, ICON_PHONE = "✅", "⚠️", "⬇", "📱 "
+
 # --- STYLING CONSTANTS ---
 COLOR_BG = ("#ebebeb", "#242424")           
 COLOR_SIDEBAR = ("#d6d6d6", "#1a1a1a")      
@@ -110,16 +121,43 @@ FONT_MONO = ("Consolas", 13)
 #  UPDATE MANAGER
 # ==============================================================================
 class UpdateManager:
+    APP_TAG = re.compile(r"^v(\d+(?:\.\d+)*)$")  # app releases only: v5.3.1 (not mcp-v1.0.1)
+
+    @staticmethod
+    def parse_version(text):
+        """'v5.3.1' / '5.3.1' / 'v5.3.1-Server' -> (5, 3, 1); None if not a version."""
+        m = re.match(r"^v?(\d+(?:\.\d+)*)", str(text).strip())
+        return tuple(int(x) for x in m.group(1).split(".")) if m else None
+
+    @staticmethod
+    def is_newer(candidate, current):
+        a, b = UpdateManager.parse_version(candidate), UpdateManager.parse_version(current)
+        if a is None or b is None: return False
+        width = max(len(a), len(b))
+        return a + (0,) * (width - len(a)) > b + (0,) * (width - len(b))
+
+    @staticmethod
+    def newest_release(releases, current_version):
+        """Newest published, non-prerelease app release that is newer than current_version."""
+        best = None
+        for r in releases or []:
+            tag = str(r.get("tag_name", "")).strip()
+            if r.get("draft") or r.get("prerelease") or not UpdateManager.APP_TAG.match(tag): continue
+            if UpdateManager.is_newer(tag, current_version) and (best is None or UpdateManager.is_newer(tag, best)):
+                best = tag
+        return best
+
     @staticmethod
     def check_for_updates(current_version, api_url):
+        """(True, tag) only when a newer app release exists. Running a newer or
+        pre-release build never offers an older version."""
         try:
             response = requests.get(api_url, timeout=3)
             if response.status_code == 200:
                 data = response.json()
-                latest_tag = data.get("tag_name", "").strip()
-                if latest_tag and latest_tag != current_version:
-                    return True, latest_tag
-        except: pass
+                newest = UpdateManager.newest_release(data if isinstance(data, list) else [data], current_version)
+                if newest: return True, newest
+        except Exception: pass
         return False, None
 
 # ==============================================================================
@@ -319,24 +357,63 @@ def label_devices(devs_by_uid):
 class DeepScanner:
     PROBE_TIMEOUT = 0.8   # TCP connect per ip:port
     VERIFY_TIMEOUT = 3.0  # quick HTTP check that the host really is a Wemo
+    VERIFY_WORKERS = 32   # HTTP checks run after the connect sweep, with modest parallelism
+
+    def tcp_open(self, ip, port):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.settimeout(self.PROBE_TIMEOUT)
+        try:
+            s.connect((ip, port)); return (ip, port)
+        except Exception:
+            return None
+        finally:
+            s.close()
+
+    def is_wemo(self, ip, port):
+        """Hosts like Windows PCs have 49152+ open (RPC) but never answer HTTP;
+        rejecting them here avoids pywemo's 10s-per-port timeouts. A dropped
+        connection (not a timeout) is retried once."""
+        for attempt in range(2):
+            try:
+                r = requests.get(f"http://{ip}:{port}/setup.xml", timeout=self.VERIFY_TIMEOUT)
+                return "urn:Belkin" in r.text
+            except requests.exceptions.Timeout:
+                return False
+            except Exception:
+                if attempt == 0: time.sleep(0.3)
+        return False
 
     def probe_port(self, ip, port):
-        """Return (ip, port) only if the port is open AND serves a Belkin setup.xml.
-        Hosts like Windows PCs have 49152+ open (RPC) but never answer HTTP;
-        rejecting them here avoids pywemo's 10s-per-port timeouts."""
+        """(ip, port) if the port is open AND serves a Belkin setup.xml, else None."""
         ip = str(ip)
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(self.PROBE_TIMEOUT)
-        try: s.connect((ip, port))
-        except Exception: return None
-        finally: s.close()
-        try:
-            r = requests.get(f"http://{ip}:{port}/setup.xml", timeout=self.VERIFY_TIMEOUT)
-            if "urn:Belkin" in r.text: return (ip, port)
-        except Exception: pass
-        return None
+        return (ip, port) if self.tcp_open(ip, port) and self.is_wemo(ip, port) else None
 
-    def scan_subnet(self, target_cidr, status_callback=None, exclude=None):
+    def find_wemo_hosts(self, hosts, known_ips=()):
+        """ip -> port of every Wemo among hosts, in two steps:
+        1. TCP connect sweep of all ip:port pairs, highly parallel;
+        2. HTTP check of only the open ports, with few workers.
+        Doing the HTTP check during the sweep missed devices: with hundreds of
+        connects in flight (Docker Desktop NAT, busy routers) the Wemo's small
+        HTTP server timed out. 6 of 7 devices were lost at 256 workers."""
+        open_ports = []
+        def sweep(targets, workers):
+            with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+                open_ports.extend(r for r in executor.map(lambda a: self.tcp_open(*a), targets) if r)
+        # Devices already known (last scan / cache) are checked first, before the
+        # connect burst, so a congested network can't make them disappear.
+        hosts = list(hosts); in_scope = set(hosts)
+        known = [ip for ip in dict.fromkeys(known_ips) if ip in in_scope]
+        if known: sweep([(ip, p) for ip in known for p in WEMO_PORTS], self.VERIFY_WORKERS)
+        known_set = set(known)
+        sweep([(ip, p) for ip in hosts if ip not in known_set for p in WEMO_PORTS], SCAN_WORKERS)
+        wemo_hosts = {}
+        if open_ports:
+            open_ports.sort(key=lambda a: WEMO_PORTS.index(a[1]))  # preferred port first per host
+            with concurrent.futures.ThreadPoolExecutor(max_workers=self.VERIFY_WORKERS) as executor:
+                for (ip, port), ok in zip(open_ports, executor.map(lambda a: self.is_wemo(*a), open_ports)):
+                    if ok: wemo_hosts.setdefault(ip, port)
+        return wemo_hosts
+
+    def scan_subnet(self, target_cidr, status_callback=None, exclude=None, known_ips=()):
         """target_cidr: one CIDR string or a list of them. exclude: set of IP strings
         already scanned (overlapping subnets are only probed once)."""
         cidrs = [target_cidr] if isinstance(target_cidr, str) else list(target_cidr)
@@ -352,12 +429,7 @@ class DeepScanner:
 
         if status_callback: status_callback(f"Probing {len(all_hosts)} IPs (Deep)...")
 
-        wemo_hosts = {}
-        with concurrent.futures.ThreadPoolExecutor(max_workers=SCAN_WORKERS) as executor:
-            futures = [executor.submit(self.probe_port, ip, p) for ip in all_hosts for p in WEMO_PORTS]
-            for future in concurrent.futures.as_completed(futures):
-                result = future.result()
-                if result: wemo_hosts.setdefault(result[0], result[1])
+        wemo_hosts = self.find_wemo_hosts(all_hosts, known_ips)
 
         if status_callback: status_callback(f"Loading {len(wemo_hosts)} Wemo devices...")
 
@@ -479,7 +551,7 @@ class WemoOpsApp(ctk.CTk):
         ctk.CTkFrame(self.sidebar, fg_color="transparent").pack(expand=True)
         
         if HAS_QR:
-            ctk.CTkButton(self.sidebar, text="📱 Mobile App", fg_color=COLOR_ACCENT, command=self.show_qr_code).pack(pady=5, padx=10)
+            ctk.CTkButton(self.sidebar, text=f"{ICON_PHONE}Mobile App", fg_color=COLOR_ACCENT, command=self.show_qr_code).pack(pady=5, padx=10)
 
         self.service_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         self.service_frame.pack(side="bottom", fill="x", pady=20, padx=10)
@@ -491,7 +563,7 @@ class WemoOpsApp(ctk.CTk):
         self.btn_start_svc = ctk.CTkButton(self.service_frame, text="▶ Start Service", width=100, fg_color="#2d8a4e", command=self.start_local_server)
         self.btn_start_svc.pack(pady=(5,0), anchor="w")
 
-        self.btn_update = ctk.CTkButton(self.sidebar, text="⬇ Update Available", fg_color=COLOR_UPDATE, 
+        self.btn_update = ctk.CTkButton(self.sidebar, text=f"{ICON_DOWNLOAD} Update Available", fg_color=COLOR_UPDATE, 
                                         font=FONT_BODY, command=lambda: webbrowser.open(UPDATE_PAGE_URL))
         self.btn_update.pack(side="bottom", padx=10, pady=(0, 10))
         self.btn_update.pack_forget()
@@ -588,10 +660,10 @@ class WemoOpsApp(ctk.CTk):
         self.api.check_connection()
         try:
             if self.api.connected:
-                self.svc_status.configure(text="✅ RUNNING", text_color="#28a745")
+                self.svc_status.configure(text=f"{ICON_OK} RUNNING", text_color="#28a745")
                 self.btn_start_svc.pack_forget()
             else:
-                self.svc_status.configure(text="⚠️ STOPPED", text_color="orange")
+                self.svc_status.configure(text=f"{ICON_WARN} STOPPED", text_color="orange")
                 self.btn_start_svc.pack(pady=(5,0), anchor="w")
         except: pass
         self.after(5000, self.server_heartbeat)
@@ -703,11 +775,13 @@ class WemoOpsApp(ctk.CTk):
             publish(dict(new_map))  # show broadcast results right away
 
             done = set()
+            # Re-check devices we already know first (see DeepScanner.find_wemo_hosts)
+            known_ips = [d.host for d in list(self.known_devices_map.values()) + list(new_map.values())]
             # Selected subnet first so its devices show up soonest, then the rest.
             for label, targets in ((selected, [selected] if selected else []), (f"{len(others)} other subnet(s)", list(others))):
                 if not targets: continue
                 log(f"Scanning {label}...")
-                for d in self.scanner.scan_subnet(targets, status_callback=log, exclude=done):
+                for d in self.scanner.scan_subnet(targets, status_callback=log, exclude=done, known_ips=known_ips):
                     new_map.setdefault(device_uid(d), d)
                 for t in targets:
                     try: done.update(str(ip) for ip in ipaddress.ip_network(t, strict=False).hosts())
@@ -875,8 +949,8 @@ class WemoOpsApp(ctk.CTk):
             time.sleep(5)
 
     def _update_status_label(self, is_running):
-        if is_running: self.hoobs_status_lbl.configure(text="✅ SERVICE ONLINE", text_color=COLOR_SUCCESS)
-        else: self.hoobs_status_lbl.configure(text="⚠️ SERVICE OFFLINE", text_color="orange")
+        if is_running: self.hoobs_status_lbl.configure(text=f"{ICON_OK} SERVICE ONLINE", text_color=COLOR_SUCCESS)
+        else: self.hoobs_status_lbl.configure(text=f"{ICON_WARN} SERVICE OFFLINE", text_color="orange")
 
     def _update_hoobs_ui(self, is_running):
         for widget in self.install_frame.winfo_children(): widget.pack_forget()
@@ -1284,7 +1358,7 @@ class WemoOpsApp(ctk.CTk):
 
     def run_update_check(self):
         h, n = UpdateManager.check_for_updates(VERSION, UPDATE_API_URL)
-        if h: self.after(0, lambda: self.btn_update.configure(text=f"⬇ Get {n}") or self.btn_update.pack(side="bottom", padx=10, pady=(0, 10)))
+        if h: self.after(0, lambda: self.btn_update.configure(text=f"{ICON_DOWNLOAD} Get {n}") or self.btn_update.pack(side="bottom", padx=10, pady=(0, 10)))
 
     def start_local_server(self):
         cmd = [SERVICE_EXE_PATH] if SERVICE_EXE_PATH and os.path.exists(SERVICE_EXE_PATH) else [sys.executable, "wemo_server.py"]
