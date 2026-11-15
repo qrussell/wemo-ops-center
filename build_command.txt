@@ -1,3 +1,0 @@
-To build the python into an exe file:
-python -m PyInstaller --noconsole --onefile --add-binary "C:\Program Files\Git\usr\bin\openssl.exe;." wemo_ops.py
-
