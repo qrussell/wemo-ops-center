@@ -2,7 +2,7 @@
 
 # ==============================================================================
 #  WEMO OPS - MASTER BUILDER (RPM / Rocky / Fedora / RHEL)
-#  Version: 5.3.0-Stable
+#  Version: 5.3.1-Stable
 # ==============================================================================
 
 set -e
@@ -10,7 +10,7 @@ set -e
 # --- CONFIGURATION ---
 APP_NAME="WemoOps"
 SAFE_NAME="wemo-ops"
-VERSION="5.3.0"
+VERSION="5.3.1"
 RELEASE="1"
 ARCH="x86_64"
 SUMMARY="Wemo Ops Center - Automation Server and Client"

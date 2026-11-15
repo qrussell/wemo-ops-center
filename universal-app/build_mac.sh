@@ -2,13 +2,13 @@
 
 # ==============================================================================
 #  WEMO OPS - MASTER BUILDER (Port 5050 Edition)
-#  Version: 5.3.0-MacFix
+#  Version: 5.3.1-MacFix
 # ==============================================================================
 
 set -e
 
 APP_NAME="WemoOps"
-VERSION="5.3.0-1"
+VERSION="5.3.1-1"
 CLIENT_SCRIPT="wemo_ops_universal.py"
 SERVER_SCRIPT="wemo_server.py"
 

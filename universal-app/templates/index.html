@@ -94,6 +94,14 @@
                     <input type="text" id="subnet-input" placeholder="192.168.1.0/24" style="flex:1; margin:0;">
                     <button class="btn btn-primary" style="width:auto; margin:0;" onclick="saveSubnet()">💾 Save</button>
                 </div>
+
+                <label style="display:flex; align-items:center; gap:10px; margin-top:15px; cursor:pointer;">
+                    <input type="checkbox" id="periodic-full-scan" onchange="togglePeriodicFullScan()" style="width:auto; margin:0;">
+                    <span>Deep-scan all connected networks every 5 min</span>
+                </label>
+                <div style="font-size:0.8rem; color:var(--subtext); margin-top:4px;">
+                    Off: connected networks are deep-scanned at startup and when you press Scan; saved subnets every 5 min.
+                </div>
             </div>
             
             <div style="text-align:center; margin-top:30px; color:var(--subtext);">

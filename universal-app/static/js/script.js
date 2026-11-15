@@ -124,13 +124,13 @@ async function toggle(n) {
     btn.className = `btn btn-toggle ${isNowOn ? "on" : ""}`;
     btn.innerText = isNowOn ? "ON" : "OFF";
   }
-  await API.post("toggle/" + n);
+  await API.post("toggle/" + encodeURIComponent(n));
   setTimeout(updateDashboard, 500);
 }
 
 // [NEW] Brightness Function
 async function setBrightness(name, val) {
-    await API.post("brightness/" + name, { level: val });
+    await API.post("brightness/" + encodeURIComponent(name), { level: val });
 }
 
 // --- SCHEDULE LOGIC ---
@@ -185,6 +185,14 @@ async function loadSettings() {
   currentSettings = s;
   if (!currentSettings.subnets) currentSettings.subnets = [];
   renderSubnetList();
+  const pfs = document.getElementById("periodic-full-scan");
+  if (pfs) pfs.checked = !!currentSettings.periodic_full_scan;
+}
+
+async function togglePeriodicFullScan() {
+  const on = document.getElementById("periodic-full-scan").checked;
+  currentSettings.periodic_full_scan = on;
+  await API.post("settings", { periodic_full_scan: on });
 }
 
 function renderSubnetList() {
