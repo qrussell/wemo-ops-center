@@ -19,7 +19,7 @@ bump version → merge to main → push tag vX.Y.Z → CI builds packages → dr
 | `.github/workflows/release.yml` | push of a `v*` tag | Checks the version, builds all packages, creates/updates a **draft** release with the packages and `SHA256SUMS.txt` |
 | `.github/workflows/release.yml` | manual (Actions → Release Build → Run workflow) | Dry run: builds all packages as downloadable workflow artifacts, no release |
 | `.github/workflows/docker-publish.yml` | a release is **published** (or manual run) | Builds `ghcr.io/qrussell/wemo-ops-server:<version>`; full releases also move `:latest` (pre-releases don't) |
-| `.github/workflows/pypi-publish.yml` | `mcp-v*` tag | MCP server (separate track, unchanged) |
+| `.github/workflows/pypi-publish.yml` | `mcp-v*` tag | Legacy: the MCP server moved to [apiarya/wemo-mcp-server](https://github.com/apiarya/wemo-mcp-server), which publishes it now. Its code is gone from `mcp/`, so don't push `mcp-v*` tags here |
 
 ## Packages built
 
@@ -181,5 +181,7 @@ All scripts live in `universal-app/` and work outside CI too:
 | Debian/Ubuntu | `bash build_deb.sh` | `python3-venv python3-tk python3-dev dpkg-dev` |
 | RHEL/Fedora | `bash build_rpm.sh` | `python3.11 python3.11-tkinter rpm-build` |
 | macOS | `bash build_mac.sh` | Python with working tkinter (python.org installer recommended) |
+
+`build_mac_tahoe.sh` (from PR #23) is an older manual Apple Silicon build; CI uses `build_mac.sh` for all four macOS DMGs, which includes the same Gatekeeper fixes.
 
 Output goes to `universal-app/dist/`. `WEMO_VERSION=X.Y.Z` overrides the version.

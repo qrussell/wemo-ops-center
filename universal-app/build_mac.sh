@@ -147,6 +147,9 @@ echo "==============================================="
 echo "[1/3] Copying App to /Applications..."
 rm -rf "/Applications/\$APP_NAME.app"
 cp -R "\$DIR/\$APP_NAME.app" /Applications/
+# Clear the download quarantine flag so Gatekeeper doesn't block the first launch
+# (from PR #23). Only the quarantine attribute: the code signature is left intact.
+xattr -r -d com.apple.quarantine "/Applications/\$APP_NAME.app" 2>/dev/null || true
 
 # 2. Install Service
 echo "[2/3] Installing Background Service..."
@@ -154,6 +157,7 @@ DATA_DIR="\$HOME/Library/Application Support/\$APP_NAME"
 mkdir -p "\$DATA_DIR"
 cp "\$DIR/Service_Binary/wemo_service" "\$DATA_DIR/"
 chmod +x "\$DATA_DIR/wemo_service"
+xattr -d com.apple.quarantine "\$DATA_DIR/wemo_service" 2>/dev/null || true
 
 # 3. Register LaunchAgent
 echo "[3/3] Registering Startup Service..."
