@@ -68,12 +68,22 @@ Ubuntu 22.04/24.04 and Debian 13.
 4. **Optional dry run:** run *Release Build* manually on your branch and download
    the artifacts to test the installers before tagging.
 
-5. **Merge to `main`**, then **tag and push the tag to GitHub** (Actions only runs
-   on GitHub; if you work from the GitLab origin, make sure the tag is mirrored):
+5. **Merge to `main`**, then **tag `main` and push the tag to GitLab** (`origin`).
+   Don't push to GitHub directly: the `github` remote's push URL is disabled on
+   purpose, and GitLab's push mirror copies the tag to GitHub, where it starts
+   *Release Build*:
    ```bash
-   git tag vX.Y.Z
-   git push <github-remote> vX.Y.Z
+   git fetch origin && git switch main && git merge --ff-only origin/main
+   git tag -a vX.Y.Z -m "Wemo Ops Center vX.Y.Z"
+   git push origin vX.Y.Z
    ```
+   Then confirm the tag reached GitHub and the build started:
+   ```bash
+   curl -s -o /dev/null -w "%{http_code}\n" https://api.github.com/repos/qrussell/wemo-ops-center/git/ref/tags/vX.Y.Z   # 200 = mirrored
+   ```
+   If it stays 404 for more than a few minutes, open GitLab → Settings → Repository →
+   **Mirroring repositories**. A `403` error means the mirror's GitHub token expired or
+   lacks the `workflow` permission; replace it, then click **Update now**.
    CI refuses to build if the tag doesn't match the versions in step 1.
 
 6. **Review the draft** on the Releases page. The job summary lists each platform's
