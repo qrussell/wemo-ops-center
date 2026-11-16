@@ -91,25 +91,28 @@ Ubuntu 22.04/24.04 and Debian 13.
    MCP release (or mark it as a pre-release) right after an app release, or those
    users will be offered the MCP tag.
 
-8. **Publish the Linux packages to the apt/dnf repository**
-   ([qrussell/qrussell-repo](https://github.com/qrussell/qrussell-repo), served at
-   `https://qrussell.github.io/qrussell-repo/`). Linux users who added the repository
-   (README → *Installation (Linux)*) only get the update after this step. In a
-   clone of `qrussell-repo`:
-   ```bash
-   gh release download vX.Y.Z --repo qrussell/wemo-ops-center --pattern '*.deb' --dir deb
-   gh release download vX.Y.Z --repo qrussell/wemo-ops-center --pattern '*.rpm' --dir rpm
-   ./update_repo.sh "Add wemo-ops X.Y.Z"
-   ```
-   `update_repo.sh` rebuilds the indexes, signs the apt index with the repository key
-   (kept only on the maintainer's PC) and pushes. Then check with
-   `apt-cache policy wemo-ops` / `dnf list --showduplicates wemo-ops` on a test machine.
-
-   From 5.3.1 the release also has **arm64** `.deb` and **aarch64** `.rpm` packages.
-   `update_repo.sh` must build the apt index with `dpkg-scanpackages --multiversion`:
-   without it only one entry per package name is kept, so the arm64 `.deb` (same
-   name and version as the amd64 one) was dropped and ARM64 machines were offered
-   the amd64 package. `createrepo_c` keeps both RPM architectures on its own.
+8. **apt/dnf repository: automatic.**
+   [qrussell/qrussell-repo](https://github.com/qrussell/qrussell-repo) (served at
+   `https://qrussell.github.io/qrussell-repo/`) rebuilds itself from the newest two
+   published releases of this project. Its *Publish repository* workflow downloads
+   the release's `.deb`/`.rpm` files, builds and signs the indexes, and deploys to
+   GitHub Pages. Packages are never committed there, so that repository doesn't grow.
+   - A new release reaches `apt`/`dnf` users **within 4 hours** (scheduled check).
+     To publish right away: qrussell-repo → **Actions → Publish repository → Run workflow**.
+   - Check it with `apt-cache policy wemo-ops` / `dnf list --refresh --showduplicates wemo-ops`
+     on a test machine.
+   - Only published, non-pre-release `vX.Y.Z` releases are picked up, so a draft or a
+     pre-release never reaches Linux users.
+   - Signing uses the repository key stored as `github-pages` environment secrets in
+     qrussell-repo (`QRUSSELL_REPO_SIGNING_KEY`, `QRUSSELL_REPO_SIGNING_PASSPHRASE`).
+     Users trust exactly that key, so don't replace it or add a subkey without a plan
+     to update every user's copy of the public key.
+   - How many releases are kept is `keep` in qrussell-repo's `sources.json`; the build
+     fails rather than exceed GitHub Pages' 1 GB limit.
+   - The apt index is built with `dpkg-scanpackages --multiversion` (otherwise the
+     arm64 `.deb`, same name and version as the amd64 one, is dropped), and the RPM
+     index is also published at the top level for machines set up with the older
+     `baseurl=.../qrussell-repo/`.
 
 ### Re-packaging the same version
 

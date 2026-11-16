@@ -230,7 +230,7 @@ sudo dnf install wemo-ops
 ```
 
 ### Updating
-Updates arrive with your normal system updates:
+Updates arrive with your normal system updates. A new release reaches the repository within a few hours of being published:
 ```bash
 sudo apt update && sudo apt upgrade   # Ubuntu / Debian
 ```
