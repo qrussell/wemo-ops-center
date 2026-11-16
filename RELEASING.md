@@ -106,10 +106,10 @@ Ubuntu 22.04/24.04 and Debian 13.
    `apt-cache policy wemo-ops` / `dnf list --showduplicates wemo-ops` on a test machine.
 
    From 5.3.1 the release also has **arm64** `.deb` and **aarch64** `.rpm` packages.
-   The first time they are added, confirm an ARM64 machine (e.g. a Raspberry Pi) sees
-   them: the repository's apt `Release` file currently says `Architecture: amd64`.
-   If apt on ARM64 reports that the repository doesn't support its architecture,
-   change that line in `update_repo.sh` to `Architectures: amd64 arm64`.
+   `update_repo.sh` must build the apt index with `dpkg-scanpackages --multiversion`:
+   without it only one entry per package name is kept, so the arm64 `.deb` (same
+   name and version as the amd64 one) was dropped and ARM64 machines were offered
+   the amd64 package. `createrepo_c` keeps both RPM architectures on its own.
 
 ### Re-packaging the same version
 
