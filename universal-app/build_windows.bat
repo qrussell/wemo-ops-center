@@ -164,7 +164,11 @@ REM block programs in the user profile. Users can still pick a folder, or
 REM choose "install for me only" in the privileges dialog.
 echo DefaultDirName={autopf}\WemoOps
 echo DisableDirPage=no
-echo UsePreviousAppDir=yes
+REM Versions up to 5.3.1 were per-user installs in AppData. Inno Setup would
+REM otherwise reuse that install mode and folder on upgrade, so always start
+REM from an admin install in Program Files; the user can still change both.
+echo UsePreviousPrivileges=no
+echo UsePreviousAppDir=no
 echo DisableProgramGroupPage=yes
 echo Uninstallable=yes
 echo OutputDir=dist
