@@ -1,6 +1,7 @@
 import customtkinter as ctk
 import pywemo
 from pywemo.ouimeaux_device.dimmer import Dimmer
+from pywemo.ouimeaux_device.insight import Insight
 import threading
 import sys
 import os
@@ -547,6 +548,7 @@ class WemoOpsApp(ctk.CTk):
         
         self.known_devices_map = {}
         self.device_switches = {} 
+        self.device_power_labels = {}
         self.last_rendered_device_names = [] 
         self.solar = SolarEngine()
         self.scanner = DeepScanner()
@@ -837,6 +839,7 @@ class WemoOpsApp(ctk.CTk):
 
     def render_devices(self):
         self.device_switches = {}
+        self.device_power_labels = {}
         current_names = sorted(list(self.known_devices_map.keys()))
         if current_names == self.last_rendered_device_names: return 
         self.last_rendered_device_names = current_names
@@ -890,6 +893,11 @@ class WemoOpsApp(ctk.CTk):
             except: slider.set(0)
             slider.pack(side="right", fill="x", expand=True, padx=10)
 
+        if isinstance(dev, Insight):  # GitHub issue 27
+            pw = ctk.CTkLabel(c, text=self._power_text(dev), font=FONT_BODY, text_color=COLOR_TEXT)
+            pw.pack(anchor="w", padx=10, pady=(0, 5))
+            self.device_power_labels[label] = pw
+
         m = ctk.CTkFrame(c, fg_color="transparent"); m.pack(fill="x", padx=10)
         ctk.CTkLabel(m, text=f"IP: {dev.host} | MAC: {mac} | SN: {serial}", font=FONT_MONO, text_color=COLOR_SUBTEXT).pack(anchor="w")
         
@@ -902,6 +910,11 @@ class WemoOpsApp(ctk.CTk):
         
         def extract_hk(): threading.Thread(target=self._extract_hk_task, args=(dev,), daemon=True).start()
         ctk.CTkButton(bot, text="Get HomeKit Code", width=120, height=24, fg_color=COLOR_BTN_SECONDARY, text_color=COLOR_BTN_TEXT, command=extract_hk).pack(side="left")
+
+    @staticmethod
+    def _power_text(dev):
+        try: return f"Power: {dev.current_power_watts:.1f} W  |  Today: {dev.today_kwh:.2f} kWh"
+        except Exception: return "Power: --"
 
     def _rename_task(self, dev, new_name):
         try:
@@ -1097,11 +1110,18 @@ class WemoOpsApp(ctk.CTk):
                 for name, dev in self.known_devices_map.items():
                     if name in self.device_switches:
                         try:
-                            state = dev.get_state(force_update=True)
+                            state = dev.get_state(force_update=True)  # Insight: also refreshes power readings
                             self.after(0, lambda n=name, s=state: self._update_switch_safe(n, s))
+                            if name in self.device_power_labels:
+                                txt = self._power_text(dev)
+                                self.after(0, lambda n=name, t=txt: self._update_power_safe(n, t))
                         except: pass
             except: pass
             time.sleep(2) 
+
+    def _update_power_safe(self, name, text):
+        try: self.device_power_labels[name].configure(text=text)
+        except Exception: pass
 
     def _update_switch_safe(self, name, state):
         if name in self.device_switches:
