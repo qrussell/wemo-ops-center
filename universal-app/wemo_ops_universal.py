@@ -1363,7 +1363,7 @@ class WemoOpsApp(ctk.CTk):
         
         r2 = ctk.CTkFrame(c, fg_color="transparent"); r2.pack(fill="x", padx=20, pady=10)
         ctk.CTkLabel(r2, text="UI Scaling:", font=FONT_BODY, text_color=COLOR_TEXT).pack(side="left")
-        ctk.CTkComboBox(r2, values=["80%", "90%", "100%", "110%", "120%", "150%"], command=self.change_scaling, variable=ctk.StringVar(value=self.settings.get("scale", "100%")), width=150).pack(side="right")
+        ctk.CTkComboBox(r2, values=["80%", "90%", "100%", "110%", "120%", "150%", "175%", "200%"], command=self.change_scaling, variable=ctk.StringVar(value=self.settings.get("scale", "100%")), width=150).pack(side="right")
 
         r3 = ctk.CTkFrame(c, fg_color="transparent"); r3.pack(fill="x", padx=20, pady=(10, 0))
         ctk.CTkLabel(r3, text="Deep-scan all connected networks every 5 min:", font=FONT_BODY, text_color=COLOR_TEXT).pack(side="left")
