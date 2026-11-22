@@ -197,6 +197,25 @@ async function loadSettings() {
   renderSubnetList();
   const pfs = document.getElementById("periodic-full-scan");
   if (pfs) pfs.checked = !!currentSettings.periodic_full_scan;
+  const sdc = document.getElementById("sync-device-clocks");
+  if (sdc) sdc.checked = !!currentSettings.sync_device_clocks;
+}
+
+async function toggleClockSync() {
+  const on = document.getElementById("sync-device-clocks").checked;
+  currentSettings.sync_device_clocks = on;
+  await API.post("settings", { sync_device_clocks: on });
+}
+
+async function syncClocksNow() {
+  const lbl = document.getElementById("clock-sync-status");
+  lbl.textContent = "Syncing...";
+  try {
+    const r = await API.post("sync_clocks", {});
+    lbl.textContent = r && r.status === "ok"
+      ? `Synced ${r.synced.length} device(s)` + (r.failed.length ? `, failed: ${r.failed.join(", ")}` : "")
+      : "Sync failed";
+  } catch (e) { lbl.textContent = "Sync failed"; }
 }
 
 async function togglePeriodicFullScan() {

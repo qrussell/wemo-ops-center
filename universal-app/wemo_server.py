@@ -19,6 +19,7 @@ VERSION = "v5.4.0-Server"
 PORT = int(os.environ.get("PORT", 5050)) 
 HOST = "0.0.0.0"
 SCAN_INTERVAL = int(os.environ.get("SCAN_INTERVAL", 300))
+CLOCK_SYNC_INTERVAL = 24 * 3600  # daily, when settings["sync_device_clocks"] is on
 
 # --- PATH SETUP ---
 if sys.platform == "win32":
@@ -369,9 +370,48 @@ def run_scan_cycle(full=False):
     except Exception as e:
         logger.error(f"Scan Error: {e}"); scan_status = "Error"
 
+def timesync_args(now=None):
+    """Arguments for a Wemo timesync TimeSync call from this computer's clock.
+    TimeZone is the *standard* UTC offset in hours ("-5" for US Eastern, "5.5"
+    for India) and dst says whether daylight saving time is in effect now.
+    Wemo firmware has no working way to read its clock back (GetTime answers
+    501 on firmware 2.00.11565), so this can't be verified on the device."""
+    now = time.time() if now is None else now
+    lt = time.localtime(now)
+    std_hours = -time.timezone / 3600
+    tz = str(int(std_hours)) if std_hours == int(std_hours) else f"{std_hours:g}"
+    return {"UTC": int(now), "TimeZone": tz, "dst": 1 if lt.tm_isdst > 0 else 0,
+            "DstSupported": 1 if time.daylight else 0}
+
+def sync_device_clock(entry):
+    """Set one device's clock from this computer (GitHub issue 32). True on success."""
+    dev = entry.get("obj")
+    svc = getattr(dev, "timesync", None) if dev else None
+    if svc is None or "TimeSync" not in getattr(svc, "actions", {}): return False
+    try:
+        svc.TimeSync(**timesync_args())
+        entry["clock_synced"] = time.time()
+        return True
+    except Exception as e:
+        logger.warning(f"Clock sync failed for {entry.get('name')}: {e}")
+        return False
+
+def sync_clocks(force=False):
+    """Sync every reachable device; without force only those not synced in the
+    last CLOCK_SYNC_INTERVAL. Returns (synced names, failed names)."""
+    ok, failed = [], []
+    for key, entry in list(device_registry.items()):
+        if not entry.get("obj"): continue
+        if not force and time.time() - entry.get("clock_sync_tried", 0) < CLOCK_SYNC_INTERVAL: continue
+        entry["clock_sync_tried"] = time.time()  # failures retry tomorrow, not every 5 min
+        (ok if sync_device_clock(entry) else failed).append(entry.get("name") or key)
+    if ok or failed: logger.info(f"Device clocks synced: {len(ok)}, failed: {len(failed)}")
+    return ok, failed
+
 def scanner_loop():
     run_scan_cycle(full=True)  # find everything once at startup
     while True:
+        if settings.get("sync_device_clocks", False): sync_clocks()
         time.sleep(SCAN_INTERVAL)
         run_scan_cycle(full=False)
 
@@ -511,6 +551,11 @@ def api_settings():
         disk = load_json(SETTINGS_FILE, {}); disk.update(update)
         save_json(SETTINGS_FILE, disk); settings.update(disk)
         return jsonify({"status": "saved"})
+
+@app.route('/api/sync_clocks', methods=['POST'])
+def api_sync_clocks():
+    ok, failed = sync_clocks(force=True)
+    return jsonify({"status": "ok", "synced": ok, "failed": failed})
 
 @app.route('/api/scan', methods=['POST'])
 def api_scan():
