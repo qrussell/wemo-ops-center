@@ -15,7 +15,7 @@ from pywemo.ouimeaux_device.dimmer import Dimmer
 from pywemo.ouimeaux_device.insight import Insight
 
 # --- CONFIGURATION ---
-VERSION = "v5.3.1-Server"
+VERSION = "v5.4.0-Server"
 PORT = int(os.environ.get("PORT", 5050)) 
 HOST = "0.0.0.0"
 SCAN_INTERVAL = int(os.environ.get("SCAN_INTERVAL", 300))

@@ -3,7 +3,7 @@ Welcome to Wemo Ops. We offer three ways to manage your smart home, depending on
 
 ![Wemo Ops Center Dashboard](assets/wemo-ops.png)
 
-![Version](https://img.shields.io/badge/version-v5.3.1-blue)
+![Version](https://img.shields.io/badge/version-v5.4.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Raspberry%20Pi-lightgrey)
 [![MCP](https://img.shields.io/badge/MCP-Server-blue)](https://modelcontextprotocol.io)
 [![AI Integration](https://img.shields.io/badge/AI-Integration-purple)](https://modelcontextprotocol.io)
@@ -17,7 +17,7 @@ Wemo Ops Center is a completely local, offline provisioning and automation suite
 * Belkin Wemo local control setup
 * Wemo troubleshooting and Wi-Fi provisioning
 
-> **New in v5.3.1:** much faster and complete device discovery, builds for Raspberry Pi / ARM Linux and macOS Tahoe, and fixes for the macOS "damaged app" error and the Linux GUI crash on Fedora. See the [v5.3.1 release notes](release-notes/v5.3.1.md).
+> **New in v5.4.0:** use the desktop app with a Wemo Ops Server on another machine, power readings for Insight plugs, a Windows installer that installs to Program Files and lets phones reach the web app, and 175%/200% UI scaling. See the [v5.4.0 release notes](release-notes/v5.4.0.md).
 
 ## 🚀 Choose Your Edition
 
@@ -29,7 +29,7 @@ Wemo Ops Center is a completely local, offline provisioning and automation suite
 | **OS Support** | Windows, macOS (15+, Apple Silicon & Intel), Linux (Fedora/RHEL/Rocky, Ubuntu/Debian, Raspberry Pi OS) | Linux server, Raspberry Pi, Docker | Python 3.10+ (Any OS) |
 | **Repository** | This repo | This repo | [apiarya/wemo-mcp-server](https://github.com/apiarya/wemo-mcp-server) |
 | **Installation** | [Releases page](../../releases) or [`apt`/`dnf` repository](#-installation-linux) | [`apt`/`dnf` repository](#-installation-linux) or [Docker](#-docker) | `pip install wemo-mcp-server` |
-| **Version** | v5.3.1 | v5.3.1 | v1.1.0 (Latest) |
+| **Version** | v5.4.0 | v5.4.0 | v1.1.0 (Latest) |
 | **Key Benefit** | **Zero Setup.** Just launch and click. | **Set & Forget.** Automation never stops. | **Universal Protocol.** Works with any MCP host. |
 
 > **Note:** The MCP Server has been moved to its own dedicated repository at [apiarya/wemo-mcp-server](https://github.com/apiarya/wemo-mcp-server) for better discoverability and to follow MCP ecosystem best practices.
@@ -43,11 +43,11 @@ No Python installation required.
 
    | System | File |
    |---|---|
-   | Windows 10/11 | `WemoOps_Setup_v5.3.1.exe` |
-   | macOS 15 (Sequoia) or newer, Apple Silicon (M1–M4) | `WemoOps_5.3.1-1_macos15-apple-silicon.dmg` |
-   | macOS 15 (Sequoia) or newer, Intel | `WemoOps_5.3.1-1_macos15-intel.dmg` |
-   | macOS 26 (Tahoe), Apple Silicon | `WemoOps_5.3.1-1_macos26-apple-silicon.dmg` |
-   | macOS 26 (Tahoe), Intel | `WemoOps_5.3.1-1_macos26-intel.dmg` |
+   | Windows 10/11 | `WemoOps_Setup_v5.4.0.exe` |
+   | macOS 15 (Sequoia) or newer, Apple Silicon (M1–M4) | `WemoOps_5.4.0-1_macos15-apple-silicon.dmg` |
+   | macOS 15 (Sequoia) or newer, Intel | `WemoOps_5.4.0-1_macos15-intel.dmg` |
+   | macOS 26 (Tahoe), Apple Silicon | `WemoOps_5.4.0-1_macos26-apple-silicon.dmg` |
+   | macOS 26 (Tahoe), Intel | `WemoOps_5.4.0-1_macos26-intel.dmg` |
    | Linux | Use the [package repository](#-installation-linux) (recommended), or download the `.deb` / `.rpm` |
 
 2. **Provisioner:** Follow the on-screen instructions to scan for and configure your Wemo devices.
@@ -66,6 +66,10 @@ When you launch `WemoOps.exe` for the first time, you may see a blue warning fro
 **To run the app:**
 1. Click **More info**.
 2. Click **Run anyway**.
+
+From v5.4.0 the installer asks for administrator rights and installs to `C:\Program Files\WemoOps` (you can pick another folder, or "install for me only"). Your settings and schedules stay in `%APPDATA%\WemoOps`. It also adds a Windows Firewall rule so phones on your home network can open the mobile web app.
+
+If Microsoft Defender reports `Trojan:Win32/Bearfoos.A!ml` or a similar `!ml` detection, that is a false positive from its machine-learning model on unsigned Python apps (see [#33](https://github.com/qrussell/wemo-ops-center/issues/33)). Check your download against `SHA256SUMS.txt` on the release page.
 
 ## 🍎 First Launch on macOS
 Open the DMG and run **Install_WemoOps.command**, or drag **WemoOps** to Applications. If macOS asks whether to open an app from an unidentified developer, right-click (or Control-click) **WemoOps** → **Open** → **Open**. You only need to do this once.
@@ -125,7 +129,7 @@ Open the DMG and run **Install_WemoOps.command**, or drag **WemoOps** to Applica
 
 ---
 **Go to the [Releases Page](../../releases) and download.**
-## 🚀 Key Features (v5.3.1)
+## 🚀 Key Features (v5.4.0)
 
 ### 1. 📡 Universal Provisioner
 * **No Cloud Required:** Connect directly to a new or reset Wemo device's Wi-Fi (`Wemo.Mini.xxx`) and push your Wi-Fi credentials instantly.
@@ -138,6 +142,7 @@ Open the DMG and run **Install_WemoOps.command**, or drag **WemoOps** to Applica
 * **All Your Networks:** Every network your computer is connected to (e.g. Ethernet and an IoT Wi-Fi) is detected and scanned automatically. VPN, virtual machine and container adapters are skipped.
 * **VLAN/Subnet Support:** Perfect for IoT setups. Save additional subnets (e.g. `192.168.20.0/23`) with the **Save** button and they are scanned too; the selected subnet is scanned first.
 * **Smart Deduplication:** Tracks devices by their unique device ID, so devices that share a name (e.g. several "Wemo Mini") are all listed, labelled with the end of their MAC address.
+* **Insight Power Readings:** Insight plugs show their current draw (W) and today's energy use (kWh), on the Dashboard and in the mobile web app.
 
 ### 3. 🛠️ Maintenance Tools
 Advanced tools to manage device health directly from the app:
@@ -154,6 +159,7 @@ Advanced tools to manage device health directly from the app:
 * **Scan the QR Code:** Connect to the mobile web app with your phone or tablet and control your Wemo devices.
 * **Local Control:** The app runs on your local network and connects directly to Wemo devices without the cloud.
 * **Manage Schedules:** Manage schedules from the mobile web app, solar automation, or time-based schedules.
+* **Remote Server:** Already running Wemo Ops Server on a Raspberry Pi, NAS or in Docker? In the desktop app, go to **Settings → Background Service**, turn off "Use the background service on this computer" and enter the server's address (e.g. `homelab.local:5050`). Schedules, scans and the QR code then use that server. The server has no login: keep it on your home network and don't port-forward it.
 
 ### ⚠️ Disclaimer
 This project is an independent open-source tool and is not affiliated with, endorsed by, or associated with Belkin International, Inc. "Wemo" is a trademark of Belkin International, Inc.
