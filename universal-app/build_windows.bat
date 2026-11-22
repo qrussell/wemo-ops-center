@@ -159,15 +159,25 @@ echo AppId={{A3D8C8F1-2B8E-4A9A-9C7D-1E6F5G4H3I2J}
 echo AppName=%APP_NAME%
 echo AppVersion=%VERSION%
 echo AppPublisher=Wemo Ops Project
-echo DefaultDirName={userappdata}\WemoOps
-echo DisableDirPage=yes
+REM Program Files by default, GitHub issue 29: policies such as CryptoPrevent
+REM block programs in the user profile. Users can still pick a folder, or
+REM choose "install for me only" in the privileges dialog.
+echo DefaultDirName={autopf}\WemoOps
+echo DisableDirPage=no
+REM Versions up to 5.3.1 were per-user installs in AppData. Inno Setup would
+REM otherwise reuse that install mode and folder on upgrade, so always start
+REM from an admin install in Program Files; the user can still change both.
+echo UsePreviousPrivileges=no
+echo UsePreviousAppDir=no
 echo DisableProgramGroupPage=yes
 echo Uninstallable=yes
 echo OutputDir=dist
 echo OutputBaseFilename=WemoOps_Setup_v%VERSION%
 echo Compression=lzma
 echo SolidCompression=yes
-echo PrivilegesRequired=lowest
+echo PrivilegesRequired=admin
+echo PrivilegesRequiredOverridesAllowed=dialog commandline
+echo UsedUserAreasWarning=no
 echo CloseApplications=force
 echo.
 echo ; --- BRANDING ---
@@ -182,6 +192,7 @@ echo.
 echo [Tasks]
 echo Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 echo Name: "startup"; Description: "Automatically start background service"; GroupDescription: "Automation:"; Flags: checkablealone
+echo Name: "firewall"; Description: "Allow phones on my home network to open the mobile web app (Windows Firewall, private networks)"; GroupDescription: "Network:"; Check: IsAdminInstallMode
 echo.
 echo [Files]
 echo ; 1. Main Dashboard
@@ -194,19 +205,49 @@ echo ; 4. Assets
 if exist "%ICON_FILE%" echo Source: "%ICON_FILE%"; DestDir: "{app}"; DestName: "app_icon.ico"; Flags: ignoreversion
 echo.
 echo [Icons]
-echo Name: "{userprograms}\%APP_NAME%"; Filename: "{app}\%APP_NAME%.exe"; IconFilename: "{app}\app_icon.ico"
-echo Name: "{userdesktop}\%APP_NAME%"; Filename: "{app}\%APP_NAME%.exe"; IconFilename: "{app}\app_icon.ico"; Tasks: desktopicon
+echo Name: "{autoprograms}\%APP_NAME%"; Filename: "{app}\%APP_NAME%.exe"; IconFilename: "{app}\app_icon.ico"
+echo Name: "{autodesktop}\%APP_NAME%"; Filename: "{app}\%APP_NAME%.exe"; IconFilename: "{app}\app_icon.ico"; Tasks: desktopicon
+REM The service runs per user, with settings in the user's AppData, so it starts at this user's login only
 echo Name: "{userstartup}\WemoOps Service"; Filename: "{app}\%SERVICE_EXE_NAME%.exe"; IconFilename: "{app}\app_icon.ico"; Tasks: startup
 echo.
 echo [Run]
+REM GitHub issue 26: without an inbound rule, phones on the LAN can't reach the web app on port 5050
+echo Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Wemo Ops Center Service"""; Flags: runhidden; Tasks: firewall
+echo Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""Wemo Ops Center Service"" dir=in action=allow program=""{app}\%SERVICE_EXE_NAME%.exe"" enable=yes profile=private,domain"; Flags: runhidden; Tasks: firewall
 echo Filename: "{app}\%SERVICE_EXE_NAME%.exe"; Description: "Start Background Service"; Flags: nowait postinstall runasoriginaluser
-echo Filename: "{app}\%APP_NAME%.exe"; Description: "Launch Dashboard"; Flags: nowait postinstall skipifsilent
+echo Filename: "{app}\%APP_NAME%.exe"; Description: "Launch Dashboard"; Flags: nowait postinstall skipifsilent runasoriginaluser
 echo.
 echo [UninstallRun]
 echo Filename: "taskkill"; Parameters: "/IM %APP_NAME%.exe /F"; Flags: runhidden; RunOnceId: "KillApp"
 echo Filename: "taskkill"; Parameters: "/IM %SERVICE_EXE_NAME%.exe /F"; Flags: runhidden; RunOnceId: "KillService"
+echo Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Wemo Ops Center Service"""; Flags: runhidden; RunOnceId: "DelFirewall"
 echo.
 echo [Code]
+echo // Versions up to 5.3.1 installed per user into %%APPDATA%%\WemoOps. On an
+echo // admin install, remove that copy first so its startup shortcut doesn't
+echo // keep launching the old service. Settings in the same folder are kept:
+echo // the uninstaller only removes files it installed.
+echo const
+echo   OldUninstKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{A3D8C8F1-2B8E-4A9A-9C7D-1E6F5G4H3I2J}_is1';
+echo.
+echo procedure RemoveOldPerUserInstall^(^);
+echo var
+echo   Uninst: String;
+echo   ResultCode: Integer;
+echo begin
+echo   if IsAdminInstallMode and RegQueryStringValue^(HKCU, OldUninstKey, 'UninstallString', Uninst^) then
+echo   begin
+echo     Uninst := RemoveQuotes^(Uninst^);
+echo     if FileExists^(Uninst^) then
+echo       Exec^(Uninst, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode^);
+echo   end;
+echo end;
+echo.
+echo procedure CurStepChanged^(CurStep: TSetupStep^);
+echo begin
+echo   if CurStep = ssInstall then RemoveOldPerUserInstall^(^);
+echo end;
+echo.
 echo function InitializeSetup: Boolean;
 echo var
 echo   ResultCode: Integer;
