@@ -3,7 +3,7 @@ Welcome to Wemo Ops. We offer three ways to manage your smart home, depending on
 
 ![Wemo Ops Center Dashboard](assets/wemo-ops.png)
 
-![Version](https://img.shields.io/badge/version-v5.4.0-blue)
+![Version](https://img.shields.io/badge/version-v5.5.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Raspberry%20Pi-lightgrey)
 [![MCP](https://img.shields.io/badge/MCP-Server-blue)](https://modelcontextprotocol.io)
 [![AI Integration](https://img.shields.io/badge/AI-Integration-purple)](https://modelcontextprotocol.io)
@@ -17,9 +17,9 @@ Wemo Ops Center is a completely local, offline provisioning and automation suite
 * Belkin Wemo local control setup
 * Wemo troubleshooting and Wi-Fi provisioning
 
-> **New in v5.4.0:** use the desktop app with a Wemo Ops Server on another machine, power readings for Insight plugs, a Windows installer that installs to Program Files and lets phones reach the web app, and 175%/200% UI scaling. See the [v5.4.0 release notes](release-notes/v5.4.0.md).
-
-> **Coming in the next release:** device clock sync (fixes schedules stored on the plug running at the wrong time), a Windows build that no longer trips Microsoft Defender's machine-learning check, and a Homebridge installer that no longer hangs at "Starting Homebridge Service".
+> **New in v5.5.0:** device clock sync (fixes schedules stored on the plug running at the wrong time), a Windows build that no longer trips Microsoft Defender's machine-learning check, and a Homebridge installer that no longer hangs at "Starting Homebridge Service". See the [v5.5.0 release notes](release-notes/v5.5.0.md).
+>
+> v5.4.0 added a remote server option for the desktop app, Insight power readings, a Program Files installer for Windows and 175%/200% UI scaling ([release notes](release-notes/v5.4.0.md)).
 
 ## 🚀 Choose Your Edition
 
@@ -31,7 +31,7 @@ Wemo Ops Center is a completely local, offline provisioning and automation suite
 | **OS Support** | Windows, macOS (15+, Apple Silicon & Intel), Linux (Fedora/RHEL/Rocky, Ubuntu/Debian, Raspberry Pi OS) | Linux server, Raspberry Pi, Docker | Python 3.10+ (Any OS) |
 | **Repository** | This repo | This repo | [apiarya/wemo-mcp-server](https://github.com/apiarya/wemo-mcp-server) |
 | **Installation** | [Releases page](../../releases) or [`apt`/`dnf` repository](#-installation-linux) | [`apt`/`dnf` repository](#-installation-linux) or [Docker](#-docker) | `pip install wemo-mcp-server` |
-| **Version** | v5.4.0 | v5.4.0 | v1.1.0 (Latest) |
+| **Version** | v5.5.0 | v5.5.0 | v1.1.0 (Latest) |
 | **Key Benefit** | **Zero Setup.** Just launch and click. | **Set & Forget.** Automation never stops. | **Universal Protocol.** Works with any MCP host. |
 
 > **Note:** The MCP Server has been moved to its own dedicated repository at [apiarya/wemo-mcp-server](https://github.com/apiarya/wemo-mcp-server) for better discoverability and to follow MCP ecosystem best practices.
@@ -45,11 +45,11 @@ No Python installation required.
 
    | System | File |
    |---|---|
-   | Windows 10/11 | `WemoOps_Setup_v5.4.0.exe` |
-   | macOS 15 (Sequoia) or newer, Apple Silicon (M1–M4) | `WemoOps_5.4.0-1_macos15-apple-silicon.dmg` |
-   | macOS 15 (Sequoia) or newer, Intel | `WemoOps_5.4.0-1_macos15-intel.dmg` |
-   | macOS 26 (Tahoe), Apple Silicon | `WemoOps_5.4.0-1_macos26-apple-silicon.dmg` |
-   | macOS 26 (Tahoe), Intel | `WemoOps_5.4.0-1_macos26-intel.dmg` |
+   | Windows 10/11 | `WemoOps_Setup_v5.5.0.exe` |
+   | macOS 15 (Sequoia) or newer, Apple Silicon (M1–M4) | `WemoOps_5.5.0-1_macos15-apple-silicon.dmg` |
+   | macOS 15 (Sequoia) or newer, Intel | `WemoOps_5.5.0-1_macos15-intel.dmg` |
+   | macOS 26 (Tahoe), Apple Silicon | `WemoOps_5.5.0-1_macos26-apple-silicon.dmg` |
+   | macOS 26 (Tahoe), Intel | `WemoOps_5.5.0-1_macos26-intel.dmg` |
    | Linux | Use the [package repository](#-installation-linux) (recommended), or download the `.deb` / `.rpm` |
 
 2. **Provisioner:** Follow the on-screen instructions to scan for and configure your Wemo devices.
@@ -71,7 +71,7 @@ When you launch `WemoOps.exe` for the first time, you may see a blue warning fro
 
 From v5.4.0 the installer asks for administrator rights and installs to `C:\Program Files\WemoOps` (you can pick another folder, or "install for me only"). Your settings and schedules stay in `%APPDATA%\WemoOps`. It also adds a Windows Firewall rule so phones on your home network can open the mobile web app.
 
-If Microsoft Defender reports `Trojan:Win32/Bearfoos.A!ml` or a similar `!ml` detection, that is a false positive from its machine-learning model on unsigned Python apps (see [#33](https://github.com/qrussell/wemo-ops-center/issues/33)). Check your download against `SHA256SUMS.txt` on the release page. From the next release the Windows app is built as a folder of files instead of self-extracting `.exe` files, which is what that check reacted to; a Defender scan of the installed app comes back clean.
+If Microsoft Defender reports `Trojan:Win32/Bearfoos.A!ml` or a similar `!ml` detection, that is a false positive from its machine-learning model on unsigned Python apps (see [#33](https://github.com/qrussell/wemo-ops-center/issues/33)). Check your download against `SHA256SUMS.txt` on the release page. From v5.5.0 the Windows app is built as a folder of files instead of self-extracting `.exe` files, which is what that check reacted to; a Defender scan of the installed app comes back clean.
 
 ## 🍎 First Launch on macOS
 Open the DMG and run **Install_WemoOps.command**, or drag **WemoOps** to Applications. If macOS asks whether to open an app from an unidentified developer, right-click (or Control-click) **WemoOps** → **Open** → **Open**. You only need to do this once.

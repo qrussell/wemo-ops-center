@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir flask requests "pywemo>=2.1.1" waitress
 FROM python:3.11-slim
 
 LABEL org.opencontainers.image.title="Wemo Ops Server" \
-      org.opencontainers.image.version="5.4.0" \
+      org.opencontainers.image.version="5.5.0" \
       org.opencontainers.image.description="Wemo device automation server" \
       org.opencontainers.image.source="https://github.com/qrussell/wemo-ops-center"
 
