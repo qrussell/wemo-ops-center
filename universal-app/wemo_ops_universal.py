@@ -361,6 +361,17 @@ def device_uid(dev):
         except Exception: pass
     return f"{dev.host}:{dev.port}"
 
+def timesync_args(now=None):
+    """Arguments for a Wemo timesync TimeSync call (GitHub issue 32). Same as
+    wemo_server.timesync_args: TimeZone is the standard UTC offset in hours,
+    dst says whether daylight saving time is in effect now."""
+    now = time.time() if now is None else now
+    lt = time.localtime(now)
+    std_hours = -time.timezone / 3600
+    tz = str(int(std_hours)) if std_hours == int(std_hours) else f"{std_hours:g}"
+    return {"UTC": int(now), "TimeZone": tz, "dst": 1 if lt.tm_isdst > 0 else 0,
+            "DstSupported": 1 if time.daylight else 0}
+
 def label_devices(devs_by_uid):
     """Map uid->device into label->device. Devices sharing a friendly name
     (e.g. several un-renamed 'Wemo Mini') get a short MAC/serial suffix so
@@ -1357,6 +1368,18 @@ class WemoOpsApp(ctk.CTk):
         ctk.CTkLabel(c3, text="Wipes Everything.\nLike New Out-of-Box.", text_color="gray", font=("Arial", 11)).pack(pady=5)
         ctk.CTkButton(c3, text="Factory Reset (2)", fg_color=COLOR_MAINT_BTN_R, text_color="#ffffff", command=lambda: self.run_reset_command(2)).pack(pady=15)
 
+        # --- Device clock (GitHub issue 32): rules and timers on the plug run on its own clock ---
+        c4 = ctk.CTkFrame(grid, fg_color=COLOR_FRAME); c4.grid(row=1, column=0, columnspan=3, sticky="nsew", padx=10, pady=10)
+        ctk.CTkLabel(c4, text="Device Clock", font=FONT_H2, text_color=COLOR_TEXT).pack(pady=(15, 5))
+        ctk.CTkLabel(c4, text="Sets the plug's clock and time zone from this computer. Use it if schedules or\n"
+                     "away mode stored on the device (e.g. from the Wemo app) run at the wrong time.",
+                     text_color="gray", font=("Arial", 11)).pack(pady=5)
+        btns = ctk.CTkFrame(c4, fg_color="transparent"); btns.pack(pady=(5, 5))
+        ctk.CTkButton(btns, text="Sync Clock", command=lambda: self.run_clock_sync(all_devices=False)).pack(side="left", padx=5)
+        ctk.CTkButton(btns, text="Sync All Devices", command=lambda: self.run_clock_sync(all_devices=True)).pack(side="left", padx=5)
+        self.clock_sync_lbl = ctk.CTkLabel(c4, text="", font=("Arial", 11), text_color=COLOR_SUBTEXT)
+        self.clock_sync_lbl.pack(pady=(0, 10))
+
     def update_maint_dropdown(self):
         names = sorted(self.known_devices_map.keys())
         if names: self.maint_dev_combo.configure(values=names); self.maint_dev_combo.set(names[0])
@@ -1369,6 +1392,28 @@ class WemoOpsApp(ctk.CTk):
         def task():
             try: dev.basicevent.ReSetup(Reset=reset_code); self.after(0, lambda: messagebox.showinfo("Success", "Command Sent"))
             except Exception as e: self.after(0, lambda: messagebox.showerror("Failure", str(e)))
+        threading.Thread(target=task, daemon=True).start()
+
+    def run_clock_sync(self, all_devices=False):
+        """GitHub issue 32: push this computer's time and time zone to the device(s)."""
+        if all_devices:
+            targets = dict(self.known_devices_map)
+        else:
+            name = self.maint_dev_combo.get(); dev = self.known_devices_map.get(name)
+            if not dev: return messagebox.showerror("Error", "Device not found.")
+            targets = {name: dev}
+        if not targets: return messagebox.showerror("Error", "No devices found yet.")
+        self.clock_sync_lbl.configure(text="Syncing...")
+        def task():
+            ok, failed = [], []
+            for name, dev in targets.items():
+                try:
+                    dev.timesync.TimeSync(**timesync_args()); ok.append(name)
+                except Exception as e:
+                    print(f"Clock sync failed for {name}: {e}"); failed.append(name)
+            msg = f"Clock synced on {len(ok)} device(s) at {time.strftime('%H:%M')}."
+            if failed: msg += " Failed: " + ", ".join(failed)
+            self.after(0, lambda: self.clock_sync_lbl.configure(text=msg))
         threading.Thread(target=task, daemon=True).start()
 
     def create_settings_ui(self):
@@ -1390,6 +1435,13 @@ class WemoOpsApp(ctk.CTk):
         self.periodic_scan_var = ctk.BooleanVar(value=bool(self.settings.get("periodic_full_scan", False)))
         ctk.CTkSwitch(r3, text="", variable=self.periodic_scan_var, command=self.change_periodic_full_scan).pack(side="right")
         ctk.CTkLabel(c, text="Background service. Off: connected networks are deep-scanned at startup and on Scan; saved subnets every 5 min.",
+                     font=("Arial", 11), text_color=COLOR_SUBTEXT, wraplength=600, justify="left").pack(anchor="w", padx=20, pady=(0, 10))
+
+        r6 = ctk.CTkFrame(c, fg_color="transparent"); r6.pack(fill="x", padx=20, pady=(10, 0))
+        ctk.CTkLabel(r6, text="Keep device clocks in sync (daily):", font=FONT_BODY, text_color=COLOR_TEXT).pack(side="left")
+        self.clock_sync_var = ctk.BooleanVar(value=bool(self.settings.get("sync_device_clocks", False)))
+        ctk.CTkSwitch(r6, text="", variable=self.clock_sync_var, command=self.change_clock_sync).pack(side="right")
+        ctk.CTkLabel(c, text="Background service sets each device's clock and time zone once a day. Device Maintenance has a manual Sync Clock.",
                      font=("Arial", 11), text_color=COLOR_SUBTEXT, wraplength=600, justify="left").pack(anchor="w", padx=20, pady=(0, 10))
 
         # --- Server location (GitHub issue 22) ---
@@ -1421,6 +1473,15 @@ class WemoOpsApp(ctk.CTk):
         if self.api.connected:  # server may keep its settings elsewhere (e.g. Linux service, Docker)
             def push():
                 try: requests.post(f"{SERVER_URL}/api/settings", json={"periodic_full_scan": on}, timeout=2)
+                except Exception: pass
+            threading.Thread(target=push, daemon=True).start()
+
+    def change_clock_sync(self):
+        on = bool(self.clock_sync_var.get())
+        self.settings["sync_device_clocks"] = on; self.save_json(SETTINGS_FILE, self.settings)
+        if self.api.connected:
+            def push():
+                try: requests.post(f"{SERVER_URL}/api/settings", json={"sync_device_clocks": on}, timeout=2)
                 except Exception: pass
             threading.Thread(target=push, daemon=True).start()
 
