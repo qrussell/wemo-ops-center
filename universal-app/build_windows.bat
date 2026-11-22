@@ -87,62 +87,24 @@ if exist "WemoOps.iss" del /f /q "WemoOps.iss"
 echo.
 echo [5/7] Compiling Binaries...
 
-:: --- A. Build HOOBS Installer ---
-echo    > Compiling HOOBS Integration Setup...
-pyinstaller --noconfirm --onefile --console --clean --uac-admin ^
-    --name "%HOOBS_EXE_NAME%" ^
-    "%HOOBS_SCRIPT%"
+:: One folder (dist\WemoOps\) holding all three exes and a shared _internal\
+:: runtime, instead of one-file exes that unpack to %%TEMP%% on every start and
+:: get flagged by Defender (GitHub issue 33). See wemo_windows.spec.
+echo    ^> Compiling WemoOps, %SERVICE_EXE_NAME% and %HOOBS_EXE_NAME% (one folder)...
+pyinstaller --noconfirm --clean wemo_windows.spec
 
-IF NOT EXIST "dist\%HOOBS_EXE_NAME%.exe" (
-    COLOR 0C
-    echo [!] CRITICAL: %HOOBS_EXE_NAME%.exe failed to build.
-    if not defined CI pause
-    exit /b 1
+SET "OUT_DIR=dist\%APP_NAME%"
+for %%F in ("%APP_NAME%" "%SERVICE_EXE_NAME%" "%HOOBS_EXE_NAME%") do (
+    IF NOT EXIST "%OUT_DIR%\%%~F.exe" (
+        COLOR 0C
+        echo [!] CRITICAL: %%~F.exe failed to build. Check Python syntax.
+        if not defined CI pause
+        exit /b 1
+    )
 )
-
-:: --- B. Build Main Dashboard ---
-echo    > Compiling Main Dashboard (%APP_NAME%)...
-SET "ICON_FLAG="
-SET "ADD_DATA_FLAG="
-if exist "%ICON_FILE%" (
-    SET "ICON_FLAG=--icon=%ICON_FILE%"
-    SET "ADD_DATA_FLAG=--add-data %ICON_FILE%;images"
-)
-
-pyinstaller --noconfirm --noconsole --onefile ^
-    --name "%APP_NAME%" ^
-    %ICON_FLAG% ^
-    %ADD_DATA_FLAG% ^
-    --collect-all customtkinter ^
-    --hidden-import pywemo ^
-    --hidden-import pyperclip ^
-    --hidden-import qrcode ^
-    --hidden-import PIL ^
-    "%MAIN_SCRIPT%"
-
-IF NOT EXIST "dist\%APP_NAME%.exe" (
+IF NOT EXIST "%OUT_DIR%\_internal" (
     COLOR 0C
-    echo [!] CRITICAL: %APP_NAME%.exe failed to build. Check Python syntax.
-    if not defined CI pause
-    exit /b 1
-)
-
-:: --- C. Build Background Service ---
-echo    > Compiling Background Service (%SERVICE_EXE_NAME%)...
-:: Note: We explicitly add the templates and static folders here
-pyinstaller --noconfirm --noconsole --onefile ^
-    --name "%SERVICE_EXE_NAME%" ^
-    %ICON_FLAG% ^
-    --add-data "templates;templates" ^
-    --add-data "static;static" ^
-    --hidden-import pywemo ^
-    --hidden-import flask ^
-    --hidden-import waitress ^
-    "%SERVICE_SCRIPT%"
-
-IF NOT EXIST "dist\%SERVICE_EXE_NAME%.exe" (
-    COLOR 0C
-    echo [!] CRITICAL: %SERVICE_EXE_NAME%.exe failed to build.
+    echo [!] CRITICAL: %OUT_DIR%\_internal is missing.
     if not defined CI pause
     exit /b 1
 )
@@ -195,12 +157,8 @@ echo Name: "startup"; Description: "Automatically start background service"; Gro
 echo Name: "firewall"; Description: "Allow phones on my home network to open the mobile web app (Windows Firewall, private networks)"; GroupDescription: "Network:"; Check: IsAdminInstallMode
 echo.
 echo [Files]
-echo ; 1. Main Dashboard
-echo Source: "dist\%APP_NAME%.exe"; DestDir: "{app}"; Flags: ignoreversion
-echo ; 2. Background Service
-echo Source: "dist\%SERVICE_EXE_NAME%.exe"; DestDir: "{app}"; Flags: ignoreversion
-echo ; 3. HOOBS Integration Installer
-echo Source: "dist\%HOOBS_EXE_NAME%.exe"; DestDir: "{app}"; Flags: ignoreversion
+echo ; Dashboard, background service, HOOBS helper and their shared _internal\ runtime
+echo Source: "%OUT_DIR%\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 echo ; 4. Assets
 if exist "%ICON_FILE%" echo Source: "%ICON_FILE%"; DestDir: "{app}"; DestName: "app_icon.ico"; Flags: ignoreversion
 echo.

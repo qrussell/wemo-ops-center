@@ -43,3 +43,6 @@ Thumbs.db
 # --- MCP publishing ---
 .mcpregistry_*
 mcp-publisher
+
+# Tracked PyInstaller spec for the Windows one-folder build
+!universal-app/wemo_windows.spec
