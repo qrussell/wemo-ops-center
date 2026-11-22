@@ -1,0 +1,1868 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wemo Ops Center — Local-First Smart Home Control & Rescue Suite</title>
+
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+          },
+          colors: {
+            obsidian: '#070B14',
+            panel: '#0F172A',
+            wemo: {
+              green: '#10B981',
+              cyan: '#06B6D4',
+              amber: '#F59E0B',
+            }
+          },
+          boxShadow: {
+            'glow-green': '0 0 24px -4px rgba(16, 185, 129, 0.45)',
+            'glow-cyan': '0 0 24px -4px rgba(6, 182, 212, 0.4)',
+            'glow-amber': '0 0 20px -4px rgba(245, 158, 11, 0.35)',
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    /* Base dark IoT theme styles */
+    body {
+      background-color: #070B14;
+      color: #E2E8F0;
+      font-family: 'Inter', system-ui, sans-serif;
+      overflow-x: hidden;
+    }
+
+    /* Subtle circuit grid background utility */
+    .bg-grid-pattern {
+      background-image:
+        linear-gradient(to right, rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    /* Glassmorphic panel */
+    .glass-card {
+      background: rgba(15, 23, 42, 0.72);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+    }
+
+    .glass-card:hover {
+      border-color: rgba(16, 185, 129, 0.32);
+    }
+
+    /* LED pulse animation */
+    @keyframes ledPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); opacity: 1; }
+      50% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); opacity: 0.85; }
+    }
+    .led-pulse {
+      animation: ledPulse 2.2s infinite;
+    }
+
+    /* Custom subtle scrollbars for terminal & modals */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #070B14;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1E293B;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #334155;
+    }
+
+    /* Toggle switch smooth transition */
+    .toggle-track {
+      transition: background-color 0.25s ease, box-shadow 0.25s ease;
+    }
+    .toggle-thumb {
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* Toast slide animation */
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(16px) scale(0.96); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .toast-enter {
+      animation: toastIn 0.22s ease-out forwards;
+    }
+  </style>
+</head>
+<body class="antialiased selection:bg-emerald-500/30 selection:text-emerald-200">
+
+  <!-- ==================== STICKY NAVIGATION BAR ==================== -->
+  <header class="sticky top-0 z-40 border-b border-slate-800/80 bg-[#070B14]/85 backdrop-blur-xl">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <!-- Brand Logo with Pulsing IoT LED -->
+        <a href="#" class="flex items-center gap-3 group">
+          <div class="relative flex items-center justify-center w-9 h-9 rounded-xl bg-slate-900 border border-emerald-500/40 shadow-glow-green">
+            <svg class="w-5 h-5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2v6" />
+              <path d="M6.8 6.8a7.5 7.5 0 1 0 10.4 0" />
+            </svg>
+            <span class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 led-pulse"></span>
+          </div>
+          <div class="flex flex-col">
+            <span class="text-sm sm:text-base font-bold tracking-tight text-white group-hover:text-emerald-300 transition-colors">Wemo Ops Center</span>
+            <span class="text-[10px] font-mono uppercase tracking-widest text-emerald-400/90">Local-First Suite</span>
+          </div>
+        </a>
+
+        <!-- Desktop Navigation Links -->
+        <nav class="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
+          <a href="#demo" class="hover:text-emerald-400 transition-colors">Live Demo</a>
+          <a href="#architecture" class="hover:text-emerald-400 transition-colors">Architecture</a>
+          <a href="#features" class="hover:text-emerald-400 transition-colors">Features</a>
+          <a href="#deploy" class="hover:text-emerald-400 transition-colors">Deploy</a>
+        </nav>
+
+        <!-- Right CTA & Mobile Menu Button -->
+        <div class="flex items-center gap-3">
+          <a href="https://github.com/qrussell/wemo-ops-center/releases" target="_blank" rel="noopener noreferrer"
+             class="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-glow-green transition-all">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+              <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+            </svg>
+            Download on GitHub
+          </a>
+          <button id="mobileMenuBtn" aria-label="Toggle Menu" class="md:hidden p-2 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-300 hover:text-white">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Mobile Dropdown Menu -->
+      <div id="mobileMenu" class="hidden md:hidden pb-4 pt-2 border-t border-slate-800/80 space-y-2">
+        <a href="#demo" class="block px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800/70 hover:text-emerald-400">Live Demo</a>
+        <a href="#architecture" class="block px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800/70 hover:text-emerald-400">Architecture</a>
+        <a href="#features" class="block px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800/70 hover:text-emerald-400">Features</a>
+        <a href="#deploy" class="block px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800/70 hover:text-emerald-400">Deploy</a>
+        <a href="https://github.com/qrussell/wemo-ops-center/releases" target="_blank" rel="noopener noreferrer"
+           class="block text-center px-3 py-2.5 rounded-xl text-sm font-semibold bg-emerald-500 text-slate-950 mt-2">
+          Download on GitHub
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== HERO SECTION ==================== -->
+  <section class="relative overflow-hidden border-b border-slate-800/80 bg-[#070B14]">
+    <!-- Live Animated IoT Network Canvas -->
+    <canvas id="heroCanvas" class="absolute inset-0 w-full h-full pointer-events-none opacity-70"></canvas>
+    <!-- Soft radial vignette over canvas for high text legibility -->
+    <div class="absolute inset-0 bg-gradient-to-b from-[#070B14]/40 via-[#070B14]/65 to-[#070B14] pointer-events-none"></div>
+
+    <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-20 sm:pt-24 sm:pb-24 text-center">
+      <!-- Top Status Badge -->
+      <div class="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-xs sm:text-sm font-mono mb-8 shadow-glow-green">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 led-pulse"></span>
+        <span>100% Local-First &bull; Zero Cloud Dependency &bull; Open Source</span>
+      </div>
+
+      <!-- Headline -->
+      <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white max-w-4xl mx-auto leading-[1.1]">
+        Resurrect Your Wemo Hardware.
+        <span class="block mt-2 bg-gradient-to-r from-emerald-400 via-cyan-400 to-emerald-300 bg-clip-text text-transparent">
+          Take Back Local Control.
+        </span>
+      </h1>
+
+      <!-- Subheadline -->
+      <p class="mt-6 text-base sm:text-lg lg:text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed">
+        Belkin's Wemo cloud shut down on <span class="text-amber-400 font-semibold">January 31, 2026</span>—your smart plugs and switches don't have to become e-waste.
+        <strong class="text-white font-semibold">Wemo Ops Center</strong> replaces the defunct cloud with a portable <span class="text-emerald-400">Desktop App</span>, an <span class="text-cyan-400">Always-On Local Server + Mobile Web UI</span>, and an <span class="text-amber-400">AI MCP Server</span>.
+      </p>
+
+      <!-- Dual CTAs -->
+      <div class="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+        <a href="#demo"
+           class="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-7 py-3.5 rounded-xl font-semibold text-slate-950 bg-emerald-500 hover:bg-emerald-400 shadow-glow-green transition-all">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+          </svg>
+          Try Interactive Ops Demo
+        </a>
+        <a href="https://github.com/qrussell/wemo-ops-center/releases" target="_blank" rel="noopener noreferrer"
+           class="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-7 py-3.5 rounded-xl font-semibold text-white bg-slate-900/90 hover:bg-slate-800 border border-slate-700 hover:border-cyan-500/50 transition-all">
+          <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+          </svg>
+          Get Latest Release (GitHub)
+        </a>
+      </div>
+
+      <!-- Quick Stat Strip -->
+      <div class="mt-14 grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 max-w-5xl mx-auto">
+        <div class="glass-card rounded-2xl p-4 text-left flex items-center gap-3.5">
+          <div class="p-2.5 rounded-xl bg-emerald-500/15 text-emerald-400 shrink-0">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18M10.584 10.587a2 2 0 002.828 2.83M9.363 5.365A9.466 9.466 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411" />
+            </svg>
+          </div>
+          <div>
+            <div class="font-mono font-bold text-white text-sm sm:text-base">0 Cloud Calls</div>
+            <div class="text-xs text-slate-400">100% LAN &amp; Offline</div>
+          </div>
+        </div>
+
+        <div class="glass-card rounded-2xl p-4 text-left flex items-center gap-3.5">
+          <div class="p-2.5 rounded-xl bg-cyan-500/15 text-cyan-400 shrink-0">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8.288 15.038a5.25 5.25 0 017.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0M1.924 8.674c5.565-5.565 14.587-5.565 20.152 0M12.53 18.22l-.53.53-.53-.53a.75.75 0 011.06 0z" />
+            </svg>
+          </div>
+          <div>
+            <div class="font-mono font-bold text-white text-sm sm:text-base">Multi-VLAN</div>
+            <div class="text-xs text-slate-400">SSDP + Deep Subnets</div>
+          </div>
+        </div>
+
+        <div class="glass-card rounded-2xl p-4 text-left flex items-center gap-3.5">
+          <div class="p-2.5 rounded-xl bg-amber-500/15 text-amber-400 shrink-0">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7" />
+            </svg>
+          </div>
+          <div>
+            <div class="font-mono font-bold text-white text-sm sm:text-base">Cross-Platform</div>
+            <div class="text-xs text-slate-400">Win / macOS / Linux / Pi</div>
+          </div>
+        </div>
+
+        <div class="glass-card rounded-2xl p-4 text-left flex items-center gap-3.5">
+          <div class="p-2.5 rounded-xl bg-emerald-500/15 text-emerald-400 shrink-0">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75" />
+            </svg>
+          </div>
+          <div>
+            <div class="font-mono font-bold text-white text-sm sm:text-base">Bridge Ready</div>
+            <div class="text-xs text-slate-400">HomeKit / HA / HOOBS</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== INTERACTIVE LIVE PRODUCT SIMULATOR ==================== -->
+  <section id="demo" class="relative py-20 bg-grid-pattern border-b border-slate-800/80">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Section Header -->
+      <div class="text-center max-w-3xl mx-auto mb-10">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-mono text-xs mb-3">
+          <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+          INTERACTIVE LIVE SIMULATOR
+        </div>
+        <h2 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+          Experience Wemo Ops Center in Action
+        </h2>
+        <p class="mt-3 text-slate-400 text-sm sm:text-base">
+          All three modes below share a <span class="text-emerald-400 font-medium">single live reactive state</span>. Toggle a switch on the Desktop App, tap it on the Mobile Server UI, or command it through the AI MCP Terminal—watch every view stay synced in real time.
+        </p>
+      </div>
+
+      <!-- Mode Switcher Tabs -->
+      <div class="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mb-6">
+        <button data-sim-tab="desktop"
+                class="sim-tab-btn px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 border transition-all bg-emerald-500/15 border-emerald-500/60 text-emerald-300 shadow-glow-green">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25" />
+          </svg>
+          Desktop Ops Dashboard
+        </button>
+
+        <button data-sim-tab="server"
+                class="sim-tab-btn px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 border transition-all bg-slate-900/80 border-slate-700/80 text-slate-300 hover:border-cyan-500/40 hover:text-white">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
+          </svg>
+          Server &amp; Mobile UI (:5050)
+        </button>
+
+        <button data-sim-tab="mcp"
+                class="sim-tab-btn px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 border transition-all bg-slate-900/80 border-slate-700/80 text-slate-300 hover:border-amber-500/40 hover:text-white">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
+          </svg>
+          AI MCP Server Terminal
+        </button>
+      </div>
+
+      <!-- Simulator Window Frame -->
+      <div class="glass-card rounded-3xl overflow-hidden shadow-2xl border border-slate-700/70">
+        <!-- Simulated Window Chrome Bar -->
+        <div class="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-3.5 bg-slate-950/90 border-b border-slate-800">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-rose-500/80"></span>
+            <span class="w-3 h-3 rounded-full bg-amber-400/80"></span>
+            <span class="w-3 h-3 rounded-full bg-emerald-500/80"></span>
+            <span id="simWindowTitle" class="ml-3 font-mono text-xs text-slate-400">wemo-ops-center v5.3.1 — Local LAN Console</span>
+          </div>
+          <div class="flex items-center gap-4 text-xs font-mono">
+            <span class="flex items-center gap-1.5 text-emerald-400">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 led-pulse"></span>
+              <span id="globalActiveCount">3 / 5 ON</span>
+            </span>
+            <span class="hidden sm:inline text-slate-500">|</span>
+            <span class="hidden sm:inline text-cyan-400">LAN: 192.168.10.0/24, 192.168.20.0/23</span>
+          </div>
+        </div>
+
+        <!-- ==================== TAB 1: DESKTOP OPS DASHBOARD ==================== -->
+        <div id="simPanel-desktop" class="sim-panel p-4 sm:p-6 lg:p-8 space-y-6">
+          <!-- Top Action Bar -->
+          <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <!-- VLAN Filter Pills -->
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-xs font-mono uppercase tracking-wider text-slate-400 mr-1">Subnet Filter:</span>
+              <button data-vlan="all" class="vlan-filter-btn px-3 py-1.5 rounded-lg text-xs font-mono font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/50">
+                All VLANs (<span id="countAll">5</span>)
+              </button>
+              <button data-vlan="10" class="vlan-filter-btn px-3 py-1.5 rounded-lg text-xs font-mono font-semibold bg-slate-900 text-slate-400 border border-slate-700 hover:text-white">
+                VLAN 10 (.10.x)
+              </button>
+              <button data-vlan="20" class="vlan-filter-btn px-3 py-1.5 rounded-lg text-xs font-mono font-semibold bg-slate-900 text-slate-400 border border-slate-700 hover:text-white">
+                VLAN 20 (.20.x)
+              </button>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex flex-wrap items-center gap-2.5">
+              <button id="deepScanBtn"
+                      class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/40 transition-all">
+                <svg id="scanIcon" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                </svg>
+                Deep Scan Subnets
+              </button>
+
+              <button id="openProvisionerBtn"
+                      class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 transition-all">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8.288 15.038a5.25 5.25 0 017.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0M12.53 18.22l-.53.53-.53-.53a.75.75 0 011.06 0z" />
+                </svg>
+                Wi-Fi Provisioner
+              </button>
+            </div>
+          </div>
+
+          <!-- Deep Scan Progress & Console Output (hidden until triggered) -->
+          <div id="scanPanel" class="hidden rounded-2xl bg-slate-950/90 border border-cyan-500/30 p-4 space-y-3">
+            <div class="flex items-center justify-between text-xs font-mono">
+              <span id="scanStatusText" class="text-cyan-300">Initializing SSDP + TCP port 49152-49155 sweep...</span>
+              <span id="scanPercent" class="text-emerald-400 font-bold">0%</span>
+            </div>
+            <div class="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+              <div id="scanProgressBar" class="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all duration-150" style="width: 0%"></div>
+            </div>
+            <div id="scanConsoleLog" class="font-mono text-[11px] text-slate-400 bg-[#050810] rounded-xl p-3 max-h-28 overflow-y-auto space-y-1"></div>
+          </div>
+
+          <!-- Interactive Device Grid -->
+          <div id="desktopDeviceGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <!-- Populated dynamically by JavaScript -->
+          </div>
+        </div>
+
+        <!-- ==================== TAB 2: ALWAYS-ON SERVER & MOBILE WEB UI ==================== -->
+        <div id="simPanel-server" class="sim-panel hidden p-4 sm:p-6 lg:p-8">
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            <!-- Left: Realistic Smartphone Frame running Mobile Web UI (:5050) -->
+            <div class="lg:col-span-5 flex justify-center">
+              <div class="w-full max-w-[330px] rounded-[2.4rem] p-3 bg-slate-950 border-[4px] border-slate-700/90 shadow-2xl relative">
+                <!-- Phone Speaker Notch -->
+                <div class="w-24 h-4 bg-slate-900 rounded-b-xl mx-auto mb-2 flex items-center justify-center">
+                  <span class="w-10 h-1 rounded-full bg-slate-700"></span>
+                </div>
+
+                <!-- Mobile Browser Address Bar -->
+                <div class="rounded-xl bg-slate-900 border border-slate-800 px-3 py-1.5 mb-3 flex items-center justify-between text-[11px] font-mono text-slate-400">
+                  <span class="flex items-center gap-1.5 text-emerald-400 truncate">
+                    <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3" />
+                    </svg>
+                    http://192.168.1.50:5050
+                  </span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300">LAN</span>
+                </div>
+
+                <!-- Mobile Web UI Screen -->
+                <div class="rounded-2xl bg-[#0B1120] border border-slate-800/90 p-3.5 space-y-3 min-h-[420px]">
+                  <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+                    <div>
+                      <div class="text-xs font-bold text-white flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 led-pulse"></span>
+                        Wemo Ops Mobile
+                      </div>
+                      <div class="text-[10px] font-mono text-slate-400">Docker Server &bull; Port 5050</div>
+                    </div>
+                    <button id="mobileAllOffBtn" class="px-2 py-1 rounded-lg text-[10px] font-mono bg-slate-800 hover:bg-rose-500/20 hover:text-rose-300 text-slate-300 border border-slate-700 transition-colors">
+                      All Off
+                    </button>
+                  </div>
+
+                  <!-- Live Synced Mobile Device Tiles -->
+                  <div id="mobileDeviceList" class="space-y-2.5">
+                    <!-- Populated dynamically by JavaScript -->
+                  </div>
+                </div>
+
+                <!-- Home Indicator -->
+                <div class="w-28 h-1 bg-slate-700 rounded-full mx-auto mt-3"></div>
+              </div>
+            </div>
+
+            <!-- Right: Solar Automation Engine + QR Code LAN Card -->
+            <div class="lg:col-span-7 space-y-6">
+              <!-- Local & Solar Automation Panel -->
+              <div class="rounded-2xl bg-slate-950/80 border border-slate-800 p-5 space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                      <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+                      </svg>
+                      Local &amp; Solar Automation Engine
+                    </h3>
+                    <p class="text-xs text-slate-400 mt-0.5">Runs 24/7 via <code class="font-mono text-cyan-300">systemd</code> or Docker with zero external API calls.</p>
+                  </div>
+                  <div class="text-right font-mono text-[11px] bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800">
+                    <div class="text-slate-300">38.9072&deg; N, 77.0369&deg; W</div>
+                    <div class="text-amber-400">Sunrise 06:58 &bull; Sunset 16:51</div>
+                  </div>
+                </div>
+
+                <!-- Interactive Schedule Items -->
+                <div id="solarScheduleList" class="space-y-2.5">
+                  <!-- Populated dynamically by JavaScript -->
+                </div>
+              </div>
+
+              <!-- Instant LAN QR Code Access Card -->
+              <div class="rounded-2xl bg-slate-950/80 border border-slate-800 p-5 flex flex-col sm:flex-row items-center gap-5">
+                <!-- Crisp Scannable-Style SVG QR Code -->
+                <div class="p-3 bg-white rounded-2xl shrink-0 shadow-lg">
+                  <svg class="w-28 h-28 text-slate-950" viewBox="0 0 29 29" fill="currentColor" shape-rendering="crispEdges">
+                    <!-- Top-left finder -->
+                    <path d="M1,1 h7 v7 h-7 z M2,2 v5 h5 v-5 z M3,3 h3 v3 h-3 z" />
+                    <!-- Top-right finder -->
+                    <path d="M21,1 h7 v7 h-7 z M22,2 v5 h5 v-5 z M23,3 h3 v3 h-3 z" />
+                    <!-- Bottom-left finder -->
+                    <path d="M1,21 h7 v7 h-7 z M2,22 v5 h5 v-5 z M3,23 h3 v3 h-3 z" />
+                    <!-- Data modules -->
+                    <rect x="10" y="1" width="2" height="2" /><rect x="14" y="1" width="1" height="3" /><rect x="17" y="2" width="2" height="2" />
+                    <rect x="10" y="5" width="3" height="1" /><rect x="15" y="5" width="2" height="2" /><rect x="18" y="6" width="1" height="2" />
+                    <rect x="1" y="10" width="2" height="2" /><rect x="5" y="10" width="3" height="2" /><rect x="10" y="9" width="2" height="3" />
+                    <rect x="13" y="10" width="3" height="2" /><rect x="18" y="10" width="2" height="2" /><rect x="22" y="10" width="3" height="1" />
+                    <rect x="26" y="10" width="2" height="3" /><rect x="2" y="14" width="3" height="2" /><rect x="7" y="14" width="2" height="3" />
+                    <rect x="11" y="14" width="2" height="2" /><rect x="15" y="13" width="3" height="3" /><rect x="20" y="14" width="2" height="2" />
+                    <rect x="24" y="14" width="3" height="2" /><rect x="1" y="18" width="2" height="1" /><rect x="5" y="18" width="4" height="1" />
+                    <rect x="11" y="18" width="3" height="2" /><rect x="16" y="18" width="2" height="2" /><rect x="20" y="18" width="3" height="2" />
+                    <rect x="25" y="18" width="2" height="2" /><rect x="10" y="22" width="2" height="3" /><rect x="14" y="21" width="2" height="2" />
+                    <rect x="18" y="22" width="3" height="2" /><rect x="23" y="21" width="2" height="3" /><rect x="26" y="22" width="2" height="2" />
+                    <rect x="10" y="26" width="3" height="2" /><rect x="15" y="25" width="2" height="3" /><rect x="19" y="26" width="3" height="2" />
+                    <rect x="24" y="26" width="4" height="2" />
+                  </svg>
+                </div>
+
+                <div class="space-y-2 text-center sm:text-left">
+                  <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 font-mono text-[11px]">
+                    Instant Mobile Web UI
+                  </div>
+                  <h4 class="text-base font-bold text-white">Scan to Control from Any Phone on Your LAN</h4>
+                  <p class="text-xs text-slate-400 leading-relaxed">
+                    No iOS or Android app required. The built-in server renders a scannable QR code pointing directly to your local host (<code class="font-mono text-cyan-300">http://192.168.1.50:5050</code>) for household members and tablets.
+                  </p>
+                  <button onclick="copyText('http://192.168.1.50:5050', 'Local Server URL copied!')"
+                          class="inline-flex items-center gap-1.5 text-xs font-mono text-cyan-400 hover:text-cyan-300 pt-1">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    Copy LAN Endpoint
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== TAB 3: AI MCP SERVER TERMINAL ==================== -->
+        <div id="simPanel-mcp" class="sim-panel hidden p-4 sm:p-6 lg:p-8 space-y-5">
+          <!-- Prompt Chips -->
+          <div class="space-y-2">
+            <div class="text-xs font-mono uppercase tracking-wider text-slate-400">Try Natural Language AI Commands (PyPI MCP Server):</div>
+            <div class="flex flex-wrap gap-2">
+              <button class="mcp-chip px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-900 hover:bg-amber-500/15 text-slate-200 hover:text-amber-300 border border-slate-700 hover:border-amber-500/40 transition-all"
+                      data-prompt="Turn off all devices on VLAN 20">
+                "Turn off all devices on VLAN 20"
+              </button>
+              <button class="mcp-chip px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-900 hover:bg-emerald-500/15 text-slate-200 hover:text-emerald-300 border border-slate-700 hover:border-emerald-500/40 transition-all"
+                      data-prompt="Turn on Espresso Machine">
+                "Turn on Espresso Machine"
+              </button>
+              <button class="mcp-chip px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-900 hover:bg-cyan-500/15 text-slate-200 hover:text-cyan-300 border border-slate-700 hover:border-cyan-500/40 transition-all"
+                      data-prompt="Extract HomeKit PIN for Living Room Lamp">
+                "Extract HomeKit PIN for Living Room Lamp"
+              </button>
+              <button class="mcp-chip px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-900 hover:bg-emerald-500/15 text-slate-200 hover:text-emerald-300 border border-slate-700 hover:border-emerald-500/40 transition-all"
+                      data-prompt="Show network status">
+                "Show network status"
+              </button>
+              <button class="mcp-chip px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-900 hover:bg-emerald-500/15 text-slate-200 hover:text-emerald-300 border border-slate-700 hover:border-emerald-500/40 transition-all"
+                      data-prompt="Turn on Office Desk Fan">
+                "Turn on Office Desk Fan"
+              </button>
+            </div>
+          </div>
+
+          <!-- Terminal Output Window -->
+          <div class="rounded-2xl bg-[#050810] border border-slate-800 overflow-hidden">
+            <div class="px-4 py-2.5 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between text-xs font-mono">
+              <span class="text-amber-400">mcp://wemo-ops-mcp &bull; JSON-RPC 2.0 stdio transport</span>
+              <button id="clearTerminalBtn" class="text-slate-400 hover:text-white">Clear Log</button>
+            </div>
+            <div id="mcpTerminalLog" class="p-4 font-mono text-xs sm:text-[13px] space-y-3 h-72 overflow-y-auto">
+              <div class="text-slate-400">
+                <span class="text-emerald-400">[MCP INIT]</span> Connected to <span class="text-white">wemo-ops-mcp</span> (local LAN discovery active: 5 Wemo devices).<br />
+                <span class="text-slate-500">Type a natural language prompt below or click a quick chip to execute live MCP tool calls.</span>
+              </div>
+            </div>
+
+            <!-- Interactive Prompt Input -->
+            <form id="mcpForm" class="flex items-center gap-2 p-3 bg-slate-950 border-t border-slate-800">
+              <span class="font-mono text-emerald-400 text-sm pl-1">&gt;</span>
+              <input id="mcpInput" type="text" autocomplete="off"
+                     placeholder="Ask AI assistant (e.g., 'Turn on Porch Lights' or 'Turn off all devices')..."
+                     class="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none font-mono" />
+              <button type="submit"
+                      class="px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-colors">
+                Execute
+              </button>
+            </form>
+          </div>
+
+          <!-- Live Mini Synced Status Strip -->
+          <div id="mcpLiveStrip" class="flex flex-wrap items-center gap-2 pt-1">
+            <!-- Populated dynamically by JavaScript -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== THREE-PILLAR ARCHITECTURE & ECOSYSTEM ==================== -->
+  <section id="architecture" class="py-20 border-b border-slate-800/80 bg-[#070B14]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center max-w-3xl mx-auto mb-14">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-mono text-xs mb-3">
+          THREE-PILLAR ARCHITECTURE
+        </div>
+        <h2 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+          One Suite. Three Local Deployment Modes.
+        </h2>
+        <p class="mt-3 text-slate-400 text-sm sm:text-base">
+          Whether you just need to rescue a reset plug on your laptop, run a 24/7 Docker homelab server, or wire Wemo into your AI agent—choose the mode that fits your network.
+        </p>
+      </div>
+
+      <!-- 3 Pillar Cards -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Pillar 1: Native Desktop GUI -->
+        <div class="glass-card rounded-3xl p-7 flex flex-col justify-between transition-all">
+          <div>
+            <div class="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mb-5">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25" />
+              </svg>
+            </div>
+            <div class="font-mono text-xs text-emerald-400 mb-1">PILLAR 01 &bull; PORTABLE GUI</div>
+            <h3 class="text-xl font-bold text-white mb-3">Native Desktop Application</h3>
+            <p class="text-sm text-slate-400 leading-relaxed mb-5">
+              Self-contained native builds for Windows, macOS, and Linux—no Python environment required. Ideal for instant LAN discovery, offline Wi-Fi provisioning, firmware inspection, and HomeKit PIN recovery.
+            </p>
+            <ul class="space-y-2 text-xs text-slate-300 font-mono">
+              <li class="flex items-center gap-2"><span class="text-emerald-400">&#10003;</span> Zero Python install needed</li>
+              <li class="flex items-center gap-2"><span class="text-emerald-400">&#10003;</span> Saved Wi-Fi batch provisioning</li>
+              <li class="flex items-center gap-2"><span class="text-emerald-400">&#10003;</span> One-click MAC/DHCP CSV export</li>
+            </ul>
+          </div>
+          <div class="mt-6 pt-4 border-t border-slate-800 flex items-center justify-between text-xs font-mono text-slate-400">
+            <span>Win / macOS / Linux</span>
+            <a href="#deploy" class="text-emerald-400 hover:underline">Get Installer &rarr;</a>
+          </div>
+        </div>
+
+        <!-- Pillar 2: Always-On Server -->
+        <div class="glass-card rounded-3xl p-7 flex flex-col justify-between border-cyan-500/30 transition-all">
+          <div>
+            <div class="w-12 h-12 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 flex items-center justify-center mb-5">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 17.25v-.228a4.5 4.5 0 00-.12-1.03l-2.268-9.64a3.375 3.375 0 00-3.285-2.602H7.923a3.375 3.375 0 00-3.285 2.602l-2.268 9.64a4.5 4.5 0 00-.12 1.03v.228m19.5 0a3 3 0 01-3 3H5.25a3 3 0 01-3-3m19.5 0a3 3 0 00-3-3H5.25a3 3 0 00-3 3" />
+              </svg>
+            </div>
+            <div class="font-mono text-xs text-cyan-400 mb-1">PILLAR 02 &bull; 24/7 AUTOMATION</div>
+            <h3 class="text-xl font-bold text-white mb-3">Always-On Server &amp; Web UI</h3>
+            <p class="text-sm text-slate-400 leading-relaxed mb-5">
+              Deploy via <code class="font-mono text-cyan-300">systemd</code> or Docker (<code class="font-mono text-cyan-300">ghcr.io/qrussell/wemo-ops-server</code>) on port <code class="font-mono text-white">5050</code>. Runs persistent sunrise/sunset solar schedules and serves a mobile-friendly LAN web UI with QR access.
+            </p>
+            <ul class="space-y-2 text-xs text-slate-300 font-mono">
+              <li class="flex items-center gap-2"><span class="text-cyan-400">&#10003;</span> Docker x86_64 &amp; ARM64 (Pi)</li>
+              <li class="flex items-center gap-2"><span class="text-cyan-400">&#10003;</span> Offline sunrise/sunset engine</li>
+              <li class="flex items-center gap-2"><span class="text-cyan-400">&#10003;</span> Mobile Web UI + QR code</li>
+            </ul>
+          </div>
+          <div class="mt-6 pt-4 border-t border-slate-800 flex items-center justify-between text-xs font-mono text-slate-400">
+            <span>Port 5050 &bull; Host Net</span>
+            <a href="#deploy" class="text-cyan-400 hover:underline">Docker Compose &rarr;</a>
+          </div>
+        </div>
+
+        <!-- Pillar 3: AI MCP Server -->
+        <div class="glass-card rounded-3xl p-7 flex flex-col justify-between transition-all">
+          <div>
+            <div class="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center mb-5">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 3v1.5M4.5 8.25H3m18 0h-1.5M4.5 12H3m18 0h-1.5m-15 3.75H3m18 0h-1.5M8.25 19.5V21M12 3v1.5m0 15V21m3.75-18v1.5m0 15V21m-9-1.5h10.5a2.25 2.25 0 002.25-2.25V6.75a2.25 2.25 0 00-2.25-2.25H6.75A2.25 2.25 0 004.5 6.75v10.5a2.25 2.25 0 002.25 2.25z" />
+              </svg>
+            </div>
+            <div class="font-mono text-xs text-amber-400 mb-1">PILLAR 03 &bull; AI INTEGRATION</div>
+            <h3 class="text-xl font-bold text-white mb-3">Model Context Protocol (MCP)</h3>
+            <p class="text-sm text-slate-400 leading-relaxed mb-5">
+              Published directly on PyPI so Claude Desktop, Cursor, and local AI assistants can discover, inspect, and control your Wemo devices using natural language—while keeping all traffic strictly inside your LAN.
+            </p>
+            <ul class="space-y-2 text-xs text-slate-300 font-mono">
+              <li class="flex items-center gap-2"><span class="text-amber-400">&#10003;</span> Published on PyPI (<code class="text-slate-200">uvx</code> / <code class="text-slate-200">pip</code>)</li>
+              <li class="flex items-center gap-2"><span class="text-amber-400">&#10003;</span> Structured JSON-RPC tools</li>
+              <li class="flex items-center gap-2"><span class="text-amber-400">&#10003;</span> Local VLAN &amp; device queries</li>
+            </ul>
+          </div>
+          <div class="mt-6 pt-4 border-t border-slate-800 flex items-center justify-between text-xs font-mono text-slate-400">
+            <span>PyPI Package</span>
+            <a href="#deploy" class="text-amber-400 hover:underline">MCP Config &rarr;</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Smart Home Bridge Banner -->
+      <div class="mt-10 rounded-3xl p-6 sm:p-8 bg-gradient-to-r from-slate-900 via-[#0E1B2E] to-slate-900 border border-slate-700/80 flex flex-col lg:flex-row items-center justify-between gap-6">
+        <div class="space-y-2 text-center lg:text-left max-w-2xl">
+          <div class="text-xs font-mono uppercase tracking-wider text-emerald-400">Smart Home Ecosystem Bridge</div>
+          <h3 class="text-xl sm:text-2xl font-bold text-white">Seamless Local Integration With Your Existing Smart Home</h3>
+          <p class="text-sm text-slate-400">
+            Provision devices offline with Wemo Ops Center, recover lost HomeKit codes, and hand them straight to your favorite local hub—keeping voice control alive after the cloud shutdown.
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center justify-center gap-3">
+          <div class="px-4 py-2.5 rounded-2xl bg-slate-950/90 border border-cyan-500/30 flex items-center gap-2.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
+            <span class="text-sm font-semibold text-white">Home Assistant</span>
+          </div>
+          <div class="px-4 py-2.5 rounded-2xl bg-slate-950/90 border border-emerald-500/30 flex items-center gap-2.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+            <span class="text-sm font-semibold text-white">Apple HomeKit</span>
+          </div>
+          <div class="px-4 py-2.5 rounded-2xl bg-slate-950/90 border border-amber-500/30 flex items-center gap-2.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+            <span class="text-sm font-semibold text-white">HOOBS / Homebridge</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== CORE CAPABILITIES GRID ==================== -->
+  <section id="features" class="py-20 bg-grid-pattern border-b border-slate-800/80">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center max-w-3xl mx-auto mb-14">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 font-mono text-xs mb-3">
+          ENGINEERED FOR HOMELABS
+        </div>
+        <h2 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+          Core Capabilities Built to Rescue Every Wemo
+        </h2>
+        <p class="mt-3 text-slate-400 text-sm sm:text-base">
+          Purpose-built network tooling that goes far beyond what Belkin's official app ever offered.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Capability 1 -->
+        <div class="glass-card rounded-2xl p-6 transition-all">
+          <div class="w-11 h-11 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center mb-4">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8.288 15.038a5.25 5.25 0 017.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0M1.924 8.674c5.565-5.565 14.587-5.565 20.152 0M12.53 18.22l-.53.53-.53-.53a.75.75 0 011.06 0z" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">Universal Wi-Fi Provisioner</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            Connect directly to any factory-reset device's <code class="font-mono text-emerald-300">Wemo.Mini.xxx</code> setup SSID, push Wi-Fi credentials completely offline, auto-handle legacy vs. newer firmware encryption, and save Wi-Fi profiles for rapid batch onboarding.
+          </p>
+        </div>
+
+        <!-- Capability 2 -->
+        <div class="glass-card rounded-2xl p-6 transition-all">
+          <div class="w-11 h-11 rounded-xl bg-cyan-500/15 text-cyan-400 flex items-center justify-center mb-4">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">Inter-VLAN &amp; Multi-Subnet Scanning</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            Combines instant SSDP broadcast discovery with deep multi-threaded sweeps across saved IoT subnets (e.g., <code class="font-mono text-cyan-300">192.168.20.0/23</code>) and Direct IP mode—automatically skipping VPN, VM, and Docker bridge interfaces.
+          </p>
+        </div>
+
+        <!-- Capability 3 -->
+        <div class="glass-card rounded-2xl p-6 transition-all">
+          <div class="w-11 h-11 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center mb-4">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">Digital HomeKit Code Extractor</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            Lost the tiny paper sticker on the back of your plug? Query supported Wemo firmware directly over local UPnP to recover and display the formatted 8-digit Apple HomeKit pairing PIN in one click.
+          </p>
+        </div>
+
+        <!-- Capability 4 -->
+        <div class="glass-card rounded-2xl p-6 transition-all">
+          <div class="w-11 h-11 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center mb-4">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">Local &amp; Solar Automation</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            Keep porch lights and routines running reliably with a persistent background service supporting fixed daily schedules and astronomical sunrise/sunset triggers calculated locally from your latitude and longitude.
+          </p>
+        </div>
+
+        <!-- Capability 5 -->
+        <div class="glass-card rounded-2xl p-6 transition-all">
+          <div class="w-11 h-11 rounded-xl bg-cyan-500/15 text-cyan-400 flex items-center justify-center mb-4">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">Hardware Rescue &amp; Maintenance</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            Clear personal info (names, icons, stale cloud rules), wipe Wi-Fi credentials to re-enter setup mode, execute full factory resets, and export MAC/IP tables for static DHCP reservations.
+          </p>
+        </div>
+
+        <!-- Capability 6 -->
+        <div class="glass-card rounded-2xl p-6 transition-all">
+          <div class="w-11 h-11 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center mb-4">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6.429 9.75L2.25 12l4.179 2.25m0-4.5l5.571 3 5.571-3m-11.142 0L2.25 7.5 12 2.25l9.75 5.25-4.179 2.25m0 0L21.75 12l-4.179 2.25m0 0l4.179 2.25L12 21.75 2.25 16.5l4.179-2.25m11.142 0l-5.571 3-5.571-3" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">Cross-Platform &amp; ARM64 Ready</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            Automated CI builds cover Windows, macOS, Linux desktops, Raspberry Pi OS (ARM64), and multi-arch Docker containers—running effortlessly on spare Pis, NAS boxes, or daily workstations.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== INTERACTIVE QUICK DEPLOY & INSTALLATION ==================== -->
+  <section id="deploy" class="py-20 bg-[#070B14] border-b border-slate-800/80">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center max-w-2xl mx-auto mb-10">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-mono text-xs mb-3">
+          QUICK DEPLOY
+        </div>
+        <h2 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+          Up and Running in Under 60 Seconds
+        </h2>
+        <p class="mt-3 text-slate-400 text-sm sm:text-base">
+          Choose your platform below to copy ready-to-run commands or grab the latest pre-built release.
+        </p>
+      </div>
+
+      <!-- Platform Tabs -->
+      <div class="flex flex-wrap items-center justify-center gap-2 mb-6">
+        <button data-deploy-tab="docker" class="deploy-tab-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-mono font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/50">
+          Docker
+        </button>
+        <button data-deploy-tab="linux" class="deploy-tab-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-mono font-semibold bg-slate-900 text-slate-400 border border-slate-700 hover:text-white">
+          Linux / Raspberry Pi
+        </button>
+        <button data-deploy-tab="windows" class="deploy-tab-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-mono font-semibold bg-slate-900 text-slate-400 border border-slate-700 hover:text-white">
+          Windows
+        </button>
+        <button data-deploy-tab="macos" class="deploy-tab-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-mono font-semibold bg-slate-900 text-slate-400 border border-slate-700 hover:text-white">
+          macOS
+        </button>
+        <button data-deploy-tab="mcp" class="deploy-tab-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-mono font-semibold bg-slate-900 text-slate-400 border border-slate-700 hover:text-white">
+          AI MCP Server (PyPI)
+        </button>
+      </div>
+
+      <!-- Deploy Content Card -->
+      <div class="glass-card rounded-3xl overflow-hidden border border-slate-700/70">
+        <!-- Docker Panel -->
+        <div id="deployPanel-docker" class="deploy-panel p-6 sm:p-8 space-y-5">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 class="text-lg font-bold text-white">Always-On Server via Docker (x86_64 &amp; ARM64)</h3>
+              <p class="text-xs sm:text-sm text-slate-400">Uses <code class="font-mono text-cyan-300">--network host</code> for SSDP multicast discovery and exposes the Mobile Web UI on port <code class="font-mono text-emerald-300">5050</code>.</p>
+            </div>
+            <span class="self-start sm:self-center px-2.5 py-1 rounded-lg bg-cyan-500/15 text-cyan-300 font-mono text-xs">Recommended for Homelabs</span>
+          </div>
+
+          <div class="relative rounded-2xl bg-[#050810] border border-slate-800 p-4 overflow-x-auto">
+            <button onclick="copyCodeBlock('code-docker')" class="absolute top-3 right-3 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-emerald-500 hover:text-slate-950 text-xs font-mono text-slate-300 transition-colors">
+              Copy
+            </button>
+            <pre id="code-docker" class="font-mono text-xs sm:text-sm text-slate-200 leading-relaxed pr-16"><span class="text-slate-500"># Pull and run the Always-On Wemo Ops Server on port 5050</span>
+<span class="text-cyan-400">docker run</span> -d \
+  --name <span class="text-emerald-400">wemo-ops-server</span> \
+  --network <span class="text-amber-300">host</span> \
+  --restart unless-stopped \
+  -e <span class="text-emerald-300">PORT=5050</span> \
+  -e <span class="text-emerald-300">TZ=America/New_York</span> \
+  -v <span class="text-cyan-300">wemo_ops_data:/data</span> \
+  <span class="text-white font-semibold">ghcr.io/qrussell/wemo-ops-server:latest</span></pre>
+          </div>
+          <div class="flex items-center justify-between text-xs text-slate-400">
+            <span>Open <code class="font-mono text-emerald-400">http://&lt;server-ip&gt;:5050</code> on any LAN browser or phone.</span>
+            <a href="https://github.com/qrussell/wemo-ops-center/releases" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:underline font-mono">Release Notes &rarr;</a>
+          </div>
+        </div>
+
+        <!-- Linux / Raspberry Pi Panel -->
+        <div id="deployPanel-linux" class="deploy-panel hidden p-6 sm:p-8 space-y-5">
+          <div>
+            <h3 class="text-lg font-bold text-white">Linux Desktop &amp; Raspberry Pi OS (systemd Service)</h3>
+            <p class="text-xs sm:text-sm text-slate-400">Install the native `.deb` / AppImage package or run the background server daemon on Debian, Ubuntu, and Raspberry Pi OS (ARM64).</p>
+          </div>
+          <div class="relative rounded-2xl bg-[#050810] border border-slate-800 p-4 overflow-x-auto">
+            <button onclick="copyCodeBlock('code-linux')" class="absolute top-3 right-3 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-emerald-500 hover:text-slate-950 text-xs font-mono text-slate-300 transition-colors">
+              Copy
+            </button>
+            <pre id="code-linux" class="font-mono text-xs sm:text-sm text-slate-200 leading-relaxed pr-16"><span class="text-slate-500"># Clone and run from source, or install .deb from GitHub Releases</span>
+<span class="text-cyan-400">git clone</span> https://github.com/qrussell/wemo-ops-center.git
+<span class="text-cyan-400">cd</span> wemo-ops-center
+<span class="text-cyan-400">python3</span> -m venv .venv &amp;&amp; <span class="text-cyan-400">source</span> .venv/bin/activate
+<span class="text-cyan-400">pip install</span> -r requirements.txt
+
+<span class="text-slate-500"># Launch Desktop GUI or Always-On Headless Server (Port 5050)</span>
+<span class="text-emerald-400">python</span> wemo_ops_center.py
+<span class="text-amber-300">sudo systemctl enable --now wemo-ops-server</span></pre>
+          </div>
+          <div class="flex justify-end">
+            <a href="https://github.com/qrussell/wemo-ops-center/releases" target="_blank" rel="noopener noreferrer" class="text-xs font-mono text-emerald-400 hover:underline">Download ARM64 / x86_64 Linux Packages &rarr;</a>
+          </div>
+        </div>
+
+        <!-- Windows Panel -->
+        <div id="deployPanel-windows" class="deploy-panel hidden p-6 sm:p-8 space-y-5">
+          <div>
+            <h3 class="text-lg font-bold text-white">Windows 10 / 11 Portable Executable &amp; Installer</h3>
+            <p class="text-xs sm:text-sm text-slate-400">Zero Python setup required. Download the standalone build from GitHub Releases and allow local private network firewall access for SSDP discovery.</p>
+          </div>
+          <div class="relative rounded-2xl bg-[#050810] border border-slate-800 p-4 overflow-x-auto">
+            <button onclick="copyCodeBlock('code-windows')" class="absolute top-3 right-3 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-emerald-500 hover:text-slate-950 text-xs font-mono text-slate-300 transition-colors">
+              Copy
+            </button>
+            <pre id="code-windows" class="font-mono text-xs sm:text-sm text-slate-200 leading-relaxed pr-16"><span class="text-slate-500"># PowerShell: Open the latest GitHub Release or run from source</span>
+<span class="text-cyan-400">Start-Process</span> <span class="text-emerald-400">"https://github.com/qrussell/wemo-ops-center/releases/latest"</span>
+
+<span class="text-slate-500"># Optional: Allow local SSDP &amp; UPnP discovery on Private networks</span>
+<span class="text-amber-300">New-NetFirewallRule</span> -DisplayName "Wemo Ops Center" -Direction Inbound -Protocol UDP -LocalPort 1900 -Action Allow</pre>
+          </div>
+          <div class="flex justify-end">
+            <a href="https://github.com/qrussell/wemo-ops-center/releases" target="_blank" rel="noopener noreferrer"
+               class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-colors">
+              Download Windows Release (.exe)
+            </a>
+          </div>
+        </div>
+
+        <!-- macOS Panel -->
+        <div id="deployPanel-macos" class="deploy-panel hidden p-6 sm:p-8 space-y-5">
+          <div>
+            <h3 class="text-lg font-bold text-white">macOS Apple Silicon &amp; Intel App Bundle</h3>
+            <p class="text-xs sm:text-sm text-slate-400">Download the native <code class="font-mono text-cyan-300">.dmg</code> from GitHub Releases and grant Local Network access when prompted by macOS.</p>
+          </div>
+          <div class="relative rounded-2xl bg-[#050810] border border-slate-800 p-4 overflow-x-auto">
+            <button onclick="copyCodeBlock('code-macos')" class="absolute top-3 right-3 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-emerald-500 hover:text-slate-950 text-xs font-mono text-slate-300 transition-colors">
+              Copy
+            </button>
+            <pre id="code-macos" class="font-mono text-xs sm:text-sm text-slate-200 leading-relaxed pr-16"><span class="text-slate-500"># If macOS Gatekeeper warns on unsigned open-source builds:</span>
+<span class="text-cyan-400">xattr</span> -cr <span class="text-emerald-400">"/Applications/Wemo Ops Center.app"</span>
+<span class="text-cyan-400">open</span> <span class="text-emerald-400">"/Applications/Wemo Ops Center.app"</span></pre>
+          </div>
+          <div class="flex justify-end">
+            <a href="https://github.com/qrussell/wemo-ops-center/releases" target="_blank" rel="noopener noreferrer"
+               class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-colors">
+              Download macOS Release (.dmg)
+            </a>
+          </div>
+        </div>
+
+        <!-- MCP PyPI Panel -->
+        <div id="deployPanel-mcp" class="deploy-panel hidden p-6 sm:p-8 space-y-5">
+          <div>
+            <h3 class="text-lg font-bold text-white">AI MCP Server via PyPI (Claude Desktop / Cursor / Agents)</h3>
+            <p class="text-xs sm:text-sm text-slate-400">Give your AI assistant local control over Wemo plugs, VLAN sweeps, and HomeKit code extraction via Model Context Protocol.</p>
+          </div>
+          <div class="relative rounded-2xl bg-[#050810] border border-slate-800 p-4 overflow-x-auto">
+            <button onclick="copyCodeBlock('code-mcp')" class="absolute top-3 right-3 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-emerald-500 hover:text-slate-950 text-xs font-mono text-slate-300 transition-colors">
+              Copy
+            </button>
+            <pre id="code-mcp" class="font-mono text-xs sm:text-sm text-slate-200 leading-relaxed pr-16"><span class="text-slate-500"># Install from PyPI</span>
+<span class="text-cyan-400">pip install</span> <span class="text-emerald-400">wemo-ops-mcp</span>
+
+<span class="text-slate-500"># Add to claude_desktop_config.json / MCP client config:</span>
+{
+  <span class="text-amber-300">"mcpServers"</span>: {
+    <span class="text-emerald-400">"wemo-ops"</span>: {
+      <span class="text-cyan-300">"command"</span>: <span class="text-white">"uvx"</span>,
+      <span class="text-cyan-300">"args"</span>: [<span class="text-white">"wemo-ops-mcp"</span>]
+    }
+  }
+}</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== FOOTER ==================== -->
+  <footer class="py-12 bg-[#050810] text-slate-400">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6">
+      <div class="flex items-center gap-3">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 led-pulse"></span>
+        <div>
+          <div class="text-sm font-bold text-white">Wemo Ops Center</div>
+          <div class="text-xs text-slate-500">Open-source, local-first smart home rescue suite. Built for hardware longevity.</div>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-center gap-6 text-xs sm:text-sm font-mono">
+        <a href="https://github.com/qrussell/wemo-ops-center" target="_blank" rel="noopener noreferrer" class="hover:text-emerald-400 transition-colors">GitHub Repository</a>
+        <a href="https://github.com/qrussell/wemo-ops-center/releases" target="_blank" rel="noopener noreferrer" class="hover:text-cyan-400 transition-colors">Releases</a>
+        <a href="https://github.com/qrussell/wemo-ops-center/issues" target="_blank" rel="noopener noreferrer" class="hover:text-amber-400 transition-colors">Issues</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ==================== DEVICE INSPECTOR MODAL ==================== -->
+  <div id="inspectorModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+    <div class="glass-card w-full max-w-lg rounded-3xl overflow-hidden border border-slate-700 shadow-2xl">
+      <div class="px-6 py-4 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <span id="inspLed" class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+          <h3 id="inspName" class="text-base font-bold text-white">Device Inspector</h3>
+        </div>
+        <button id="closeInspectorBtn" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-5">
+        <!-- Hardware Telemetry Grid -->
+        <div class="grid grid-cols-2 gap-3 text-xs font-mono">
+          <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+            <div class="text-slate-500 mb-1">IP ADDRESS</div>
+            <div id="inspIp" class="text-cyan-300 font-semibold">192.168.20.14</div>
+          </div>
+          <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+            <div class="text-slate-500 mb-1">MAC ADDRESS</div>
+            <div id="inspMac" class="text-white font-semibold">60:38:E0:4A:19:C2</div>
+          </div>
+          <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+            <div class="text-slate-500 mb-1">MODEL / VLAN</div>
+            <div id="inspModel" class="text-emerald-300 font-semibold">Wemo Mini &bull; VLAN 20</div>
+          </div>
+          <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+            <div class="text-slate-500 mb-1">SERIAL NUMBER</div>
+            <div id="inspSerial" class="text-slate-200">221912K0104829</div>
+          </div>
+          <div class="col-span-2 p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+            <div class="text-slate-500 mb-1">FIRMWARE VERSION</div>
+            <div id="inspFirmware" class="text-slate-200 break-all">WeMo_WW_2.00.11452.PVT-OWRT-SNSV2</div>
+          </div>
+        </div>
+
+        <!-- HomeKit Code Extractor Box -->
+        <div class="rounded-2xl bg-slate-950/90 border border-amber-500/30 p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
+              </svg>
+              Digital HomeKit Setup Code
+            </span>
+            <button id="extractPinBtn" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 transition-colors">
+              Extract HomeKit Code
+            </button>
+          </div>
+          <div id="homekitPinBox" class="hidden flex items-center justify-between p-3 rounded-xl bg-slate-900 border border-slate-700">
+            <div class="flex items-center gap-3">
+              <div class="px-2 py-1 rounded bg-white text-slate-950 font-mono text-xs font-bold">HK</div>
+              <span id="inspPinValue" class="font-mono text-lg font-bold tracking-widest text-white">482-91-704</span>
+            </div>
+            <button id="copyPinBtn" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-emerald-500 hover:text-slate-950 text-xs font-mono text-emerald-300 transition-colors">
+              Copy PIN
+            </button>
+          </div>
+        </div>
+
+        <!-- Maintenance Actions -->
+        <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800">
+          <div class="flex items-center gap-2">
+            <button onclick="showToast('Cleared custom rules & personal info on device (simulated).', 'amber')"
+                    class="px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700">
+              Clear Personal Info
+            </button>
+            <button onclick="showToast('Wi-Fi credentials wiped. Device rebooting into setup AP mode (simulated).', 'amber')"
+                    class="px-3 py-1.5 rounded-xl text-xs font-medium bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30">
+              Reset Wi-Fi
+            </button>
+          </div>
+          <button id="inspToggleBtn" class="px-4 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-colors">
+            Toggle Power
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== WI-FI PROVISIONER INTERACTIVE MODAL ==================== -->
+  <div id="provisionerModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+    <div class="glass-card w-full max-w-lg rounded-3xl overflow-hidden border border-amber-500/40 shadow-2xl">
+      <div class="px-6 py-4 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between">
+        <div>
+          <h3 class="text-base font-bold text-white">Offline Universal Wi-Fi Provisioner</h3>
+          <p class="text-[11px] font-mono text-amber-400">Zero Cloud Onboarding Wizard</p>
+        </div>
+        <button id="closeProvisionerBtn" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-5">
+        <!-- Step Indicators -->
+        <div class="grid grid-cols-3 gap-2 text-center font-mono text-[11px]">
+          <div id="provStepBadge1" class="py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold">1. Setup AP</div>
+          <div id="provStepBadge2" class="py-1.5 rounded-lg bg-slate-900 text-slate-500 border border-slate-800">2. Push Wi-Fi</div>
+          <div id="provStepBadge3" class="py-1.5 rounded-lg bg-slate-900 text-slate-500 border border-slate-800">3. Rescan LAN</div>
+        </div>
+
+        <!-- Step 1 -->
+        <div id="provStep1" class="space-y-4">
+          <p class="text-sm text-slate-300">
+            Connect your workstation to the factory-reset device's temporary setup network. Wemo Ops Center detects the local UPnP endpoint at <code class="font-mono text-cyan-300">10.22.22.1</code>.
+          </p>
+          <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8.288 15.038a5.25 5.25 0 017.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0" />
+                </svg>
+              </div>
+              <div>
+                <div class="font-mono text-sm font-bold text-white">Wemo.Mini.4C2</div>
+                <div class="text-xs text-slate-400">Open Setup AP &bull; Signal -42 dBm</div>
+              </div>
+            </div>
+            <span class="px-2.5 py-1 rounded-full text-[11px] font-mono bg-emerald-500/15 text-emerald-400">Detected</span>
+          </div>
+          <button id="provNext1" class="w-full py-2.5 rounded-xl font-semibold text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-colors">
+            Connect to Wemo.Mini.4C2 &rarr;
+          </button>
+        </div>
+
+        <!-- Step 2 -->
+        <div id="provStep2" class="hidden space-y-4">
+          <p class="text-sm text-slate-300">
+            Select a saved local Wi-Fi profile. Wemo Ops Center automatically detects firmware encryption (AES/OpenSSL legacy vs. v2) and pushes credentials offline.
+          </p>
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs font-mono text-slate-400 mb-1">SAVED WI-FI PROFILE (2.4 GHz IoT VLAN)</label>
+              <select id="provWifiProfile" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3.5 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-emerald-500">
+                <option value="HomeLab_IoT_24G">HomeLab_IoT_24G (VLAN 20 &bull; WPA2-PSK)</option>
+                <option value="Main_LAN_24G">Main_LAN_24G (VLAN 10 &bull; WPA2-PSK)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-mono text-slate-400 mb-1">FRIENDLY DEVICE NAME</label>
+              <input id="provDeviceName" type="text" value="Patio String Lights"
+                     class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500" />
+            </div>
+          </div>
+          <button id="provNext2" class="w-full py-2.5 rounded-xl font-semibold text-sm bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition-colors">
+            Encrypt &amp; Push Credentials Offline &rarr;
+          </button>
+        </div>
+
+        <!-- Step 3 -->
+        <div id="provStep3" class="hidden space-y-4 text-center py-2">
+          <div class="w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto shadow-glow-green">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+          </div>
+          <div>
+            <h4 class="text-lg font-bold text-white">Device Provisioned &amp; Joined LAN!</h4>
+            <p id="provResultMsg" class="text-xs sm:text-sm text-slate-400 mt-1">
+              Patio String Lights joined HomeLab_IoT_24G and was auto-discovered on 192.168.20.64.
+            </p>
+          </div>
+          <button id="provFinishBtn" class="w-full py-2.5 rounded-xl font-semibold text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-colors">
+            Done &amp; View in Dashboard
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TOAST NOTIFICATION CONTAINER ==================== -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm"></div>
+
+  <!-- ==================== APPLICATION JAVASCRIPT ==================== -->
+  <script>
+    // =========================================================================
+    // 1. SHARED REACTIVE STATE FOR ALL 3 SIMULATOR MODES
+    // =========================================================================
+    const state = {
+      activeSimTab: 'desktop',
+      vlanFilter: 'all',
+      inspectedDeviceId: null,
+      isScanning: false,
+      devices: [
+        {
+          id: 'dev-1',
+          name: 'Living Room Lamp',
+          model: 'Wemo Mini',
+          ip: '192.168.20.14',
+          vlan: 20,
+          on: true,
+          mac: '60:38:E0:4A:19:C2',
+          firmware: 'WeMo_WW_2.00.11452.PVT-OWRT-SNSV2',
+          serial: '221912K0104829',
+          homekitPin: '482-91-704',
+          watts: 14.2
+        },
+        {
+          id: 'dev-2',
+          name: 'Porch Lights',
+          model: 'Wemo Switch',
+          ip: '192.168.20.22',
+          vlan: 20,
+          on: false,
+          mac: 'EC:1A:59:8B:44:10',
+          firmware: 'WeMo_WW_2.00.11532.PVT-OWRT-LS',
+          serial: '221844K1200914',
+          homekitPin: '719-34-882',
+          watts: 0.0
+        },
+        {
+          id: 'dev-3',
+          name: 'Espresso Machine',
+          model: 'Wemo Insight',
+          ip: '192.168.20.31',
+          vlan: 20,
+          on: true,
+          mac: '94:10:3E:2D:7F:05',
+          firmware: 'WeMo_WW_2.00.11408.PVT-OWRT-Insight',
+          serial: '231709K1302218',
+          homekitPin: '614-28-905',
+          watts: 1120.5
+        },
+        {
+          id: 'dev-4',
+          name: 'Office Desk Fan',
+          model: 'Wemo Mini',
+          ip: '192.168.10.45',
+          vlan: 10,
+          on: false,
+          mac: '60:38:E0:7C:88:E1',
+          firmware: 'WeMo_WW_2.00.11452.PVT-OWRT-SNSV2',
+          serial: '222005K0107731',
+          homekitPin: '305-62-119',
+          watts: 0.0
+        },
+        {
+          id: 'dev-5',
+          name: 'Garage Floodlight',
+          model: 'Wemo Dimmer',
+          ip: '192.168.20.58',
+          vlan: 20,
+          on: true,
+          mac: 'C4:41:1E:91:0A:F4',
+          firmware: 'WeMo_WW_2.00.11573.PVT-OWRT-Dimmer',
+          serial: '222118K1503390',
+          homekitPin: '846-10-523',
+          watts: 38.6
+        }
+      ],
+      schedules: [
+        { id: 'sch-1', target: 'Porch Lights', trigger: 'Sunset (16:51)', action: 'Turn ON', type: 'solar', enabled: true },
+        { id: 'sch-2', target: 'Espresso Machine', trigger: 'Daily 06:30 AM', action: 'Turn ON', type: 'fixed', enabled: true },
+        { id: 'sch-3', target: 'Living Room Lamp', trigger: 'Sunset - 15m', action: 'Turn ON', type: 'solar', enabled: true },
+        { id: 'sch-4', target: 'Garage Floodlight', trigger: 'Sunrise (06:58)', action: 'Turn OFF', type: 'solar', enabled: false }
+      ]
+    };
+
+    // =========================================================================
+    // 2. TOAST & CLIPBOARD UTILITIES (NO alert() / confirm())
+    // =========================================================================
+    function showToast(message, tone = 'green') {
+      const container = document.getElementById('toastContainer');
+      const colors = {
+        green: 'border-emerald-500/50 bg-slate-950/95 text-emerald-300',
+        cyan: 'border-cyan-500/50 bg-slate-950/95 text-cyan-300',
+        amber: 'border-amber-500/50 bg-slate-950/95 text-amber-300'
+      };
+      const toast = document.createElement('div');
+      toast.className = `toast-enter px-4 py-3 rounded-2xl border shadow-xl text-xs font-mono flex items-center gap-2.5 ${colors[tone] || colors.green}`;
+      toast.innerHTML = `<span class="w-2 h-2 rounded-full bg-current shrink-0"></span><span>${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(8px)';
+        toast.style.transition = 'all 0.25s ease';
+        setTimeout(() => toast.remove(), 260);
+      }, 2800);
+    }
+
+    function copyText(text, toastMsg = 'Copied to clipboard!') {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        showToast(toastMsg, 'green');
+      } catch (err) {
+        showToast('Could not copy automatically.', 'amber');
+      }
+    }
+
+    function copyCodeBlock(elementId) {
+      const el = document.getElementById(elementId);
+      if (el) copyText(el.innerText, 'Command copied to clipboard!');
+    }
+
+    // =========================================================================
+    // 3. STATE MUTATION & SYNCHRONIZED RENDERING
+    // =========================================================================
+    function toggleDevice(deviceId, forceState = null) {
+      const dev = state.devices.find(d => d.id === deviceId);
+      if (!dev) return;
+      dev.on = forceState !== null ? forceState : !dev.on;
+      renderAllViews();
+    }
+
+    function renderAllViews() {
+      const onCount = state.devices.filter(d => d.on).length;
+      document.getElementById('globalActiveCount').textContent = `${onCount} / ${state.devices.length} ON`;
+      document.getElementById('countAll').textContent = state.devices.length;
+
+      renderDesktopDevices();
+      renderMobileDevices();
+      renderSolarSchedules();
+      renderMcpStrip();
+
+      // Update inspector modal if currently open
+      if (state.inspectedDeviceId) {
+        const dev = state.devices.find(d => d.id === state.inspectedDeviceId);
+        if (dev) {
+          document.getElementById('inspLed').className = `w-2.5 h-2.5 rounded-full ${dev.on ? 'bg-emerald-400 led-pulse' : 'bg-slate-600'}`;
+        }
+      }
+    }
+
+    function renderDesktopDevices() {
+      const grid = document.getElementById('desktopDeviceGrid');
+      const filtered = state.devices.filter(d => state.vlanFilter === 'all' || String(d.vlan) === String(state.vlanFilter));
+
+      grid.innerHTML = filtered.map(dev => `
+        <div class="rounded-2xl p-4 bg-slate-950/80 border ${dev.on ? 'border-emerald-500/40 shadow-glow-green' : 'border-slate-800'} transition-all flex flex-col justify-between gap-4">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex items-start gap-3">
+              <!-- LED Status Dot -->
+              <div class="mt-1 w-3 h-3 rounded-full shrink-0 ${dev.on ? 'bg-emerald-400 led-pulse' : 'bg-slate-600'}"></div>
+              <div>
+                <h4 class="font-bold text-white text-sm sm:text-base leading-tight">${dev.name}</h4>
+                <div class="text-xs text-slate-400 mt-0.5">${dev.model}</div>
+              </div>
+            </div>
+
+            <!-- Interactive ON/OFF Toggle Switch -->
+            <button onclick="toggleDevice('${dev.id}')" aria-label="Toggle ${dev.name}"
+                    class="toggle-track relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent ${dev.on ? 'bg-emerald-500 shadow-glow-green' : 'bg-slate-700'}">
+              <span class="toggle-thumb pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ${dev.on ? 'translate-x-5' : 'translate-x-0'}"></span>
+            </button>
+          </div>
+
+          <!-- Network Metadata -->
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-800/90 text-[11px] font-mono">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded-md ${dev.vlan === 20 ? 'bg-cyan-500/15 text-cyan-300' : 'bg-amber-500/15 text-amber-300'}">
+                VLAN ${dev.vlan}
+              </span>
+              <span class="text-slate-300">${dev.ip}</span>
+            </div>
+            <button onclick="openInspector('${dev.id}')"
+                    class="text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1">
+              Inspect
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderMobileDevices() {
+      const list = document.getElementById('mobileDeviceList');
+      list.innerHTML = state.devices.map(dev => `
+        <button onclick="toggleDevice('${dev.id}')"
+                class="w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between ${dev.on ? 'bg-emerald-500/15 border-emerald-500/40' : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'}">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <span class="w-2.5 h-2.5 rounded-full shrink-0 ${dev.on ? 'bg-emerald-400 led-pulse' : 'bg-slate-600'}"></span>
+            <div class="truncate">
+              <div class="text-xs font-semibold text-white truncate">${dev.name}</div>
+              <div class="text-[10px] font-mono text-slate-400">${dev.ip} &bull; VLAN ${dev.vlan}</div>
+            </div>
+          </div>
+          <span class="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold ${dev.on ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'}">
+            ${dev.on ? 'ON' : 'OFF'}
+          </span>
+        </button>
+      `).join('');
+    }
+
+    function renderSolarSchedules() {
+      const list = document.getElementById('solarScheduleList');
+      list.innerHTML = state.schedules.map(sch => `
+        <div class="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-900/70 border border-slate-800">
+          <div class="flex items-center gap-3 min-w-0">
+            <span class="px-2 py-1 rounded-lg font-mono text-[10px] uppercase ${sch.type === 'solar' ? 'bg-amber-500/15 text-amber-300' : 'bg-cyan-500/15 text-cyan-300'}">
+              ${sch.type}
+            </span>
+            <div class="truncate">
+              <div class="text-xs sm:text-sm font-semibold text-white truncate">${sch.target} &rarr; <span class="text-emerald-400">${sch.action}</span></div>
+              <div class="text-[11px] font-mono text-slate-400">${sch.trigger}</div>
+            </div>
+          </div>
+          <button onclick="toggleSchedule('${sch.id}')"
+                  class="toggle-track relative inline-flex h-6 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent ${sch.enabled ? 'bg-emerald-500' : 'bg-slate-700'}">
+            <span class="toggle-thumb pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ${sch.enabled ? 'translate-x-4' : 'translate-x-0'}"></span>
+          </button>
+        </div>
+      `).join('');
+    }
+
+    function toggleSchedule(id) {
+      const sch = state.schedules.find(s => s.id === id);
+      if (!sch) return;
+      sch.enabled = !sch.enabled;
+      renderSolarSchedules();
+      showToast(`Schedule for ${sch.target} ${sch.enabled ? 'enabled' : 'paused'}.`, 'cyan');
+    }
+
+    function renderMcpStrip() {
+      const strip = document.getElementById('mcpLiveStrip');
+      strip.innerHTML = '<span class="text-[11px] font-mono text-slate-500 mr-1">LIVE STATE:</span>' + state.devices.map(dev => `
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono border ${dev.on ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-slate-900 border-slate-800 text-slate-500'}">
+          <span class="w-1.5 h-1.5 rounded-full ${dev.on ? 'bg-emerald-400' : 'bg-slate-600'}"></span>
+          ${dev.name}
+        </span>
+      `).join('');
+    }
+
+    // =========================================================================
+    // 4. SIMULATOR TABS & VLAN FILTERS
+    // =========================================================================
+    document.querySelectorAll('.sim-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = btn.dataset.simTab;
+        state.activeSimTab = tab;
+
+        document.querySelectorAll('.sim-tab-btn').forEach(b => {
+          b.className = 'sim-tab-btn px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 border transition-all bg-slate-900/80 border-slate-700/80 text-slate-300 hover:text-white';
+        });
+
+        const activeStyles = {
+          desktop: 'bg-emerald-500/15 border-emerald-500/60 text-emerald-300 shadow-glow-green',
+          server: 'bg-cyan-500/15 border-cyan-500/60 text-cyan-300 shadow-glow-cyan',
+          mcp: 'bg-amber-500/15 border-amber-500/60 text-amber-300 shadow-glow-amber'
+        };
+        btn.className = `sim-tab-btn px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 border transition-all ${activeStyles[tab]}`;
+
+        document.querySelectorAll('.sim-panel').forEach(p => p.classList.add('hidden'));
+        document.getElementById(`simPanel-${tab}`).classList.remove('hidden');
+
+        const titles = {
+          desktop: 'wemo-ops-center v5.3.1 — Local LAN Console',
+          server: 'wemo-ops-server :5050 — Mobile Web UI & Solar Daemon',
+          mcp: 'wemo-ops-mcp (PyPI) — AI Assistant MCP Bridge'
+        };
+        document.getElementById('simWindowTitle').textContent = titles[tab];
+      });
+    });
+
+    document.querySelectorAll('.vlan-filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.vlanFilter = btn.dataset.vlan;
+        document.querySelectorAll('.vlan-filter-btn').forEach(b => {
+          b.className = 'vlan-filter-btn px-3 py-1.5 rounded-lg text-xs font-mono font-semibold bg-slate-900 text-slate-400 border border-slate-700 hover:text-white';
+        });
+        btn.className = 'vlan-filter-btn px-3 py-1.5 rounded-lg text-xs font-mono font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/50';
+        renderDesktopDevices();
+      });
+    });
+
+    document.getElementById('mobileAllOffBtn').addEventListener('click', () => {
+      state.devices.forEach(d => d.on = false);
+      renderAllViews();
+      showToast('All devices turned OFF via Mobile Server UI.', 'cyan');
+    });
+
+    // =========================================================================
+    // 5. DEEP SUBNET SCANNER SIMULATION
+    // =========================================================================
+    document.getElementById('deepScanBtn').addEventListener('click', () => {
+      if (state.isScanning) return;
+      state.isScanning = true;
+
+      const panel = document.getElementById('scanPanel');
+      const bar = document.getElementById('scanProgressBar');
+      const pct = document.getElementById('scanPercent');
+      const status = document.getElementById('scanStatusText');
+      const log = document.getElementById('scanConsoleLog');
+
+      panel.classList.remove('hidden');
+      bar.style.width = '0%';
+      pct.textContent = '0%';
+      log.innerHTML = '';
+
+      const steps = [
+        { p: 18, t: 'Skipping virtual/VPN interfaces (docker0, wg0, utun3)...', l: '[NET] Active LAN interfaces: en0 (192.168.10.0/24), vlan20 (192.168.20.0/23)' },
+        { p: 42, t: 'Sending SSDP M-SEARCH multicast to 239.255.255.250:1900...', l: '[SSDP] Discovered 192.168.10.45 (Office Desk Fan) in 140ms' },
+        { p: 70, t: 'Deep-sweeping saved IoT VLAN 192.168.20.0/23 (ports 49152-49155)...', l: '[VLAN20] Found 4 Belkin UPnP endpoints (.14, .22, .31, .58)' },
+        { p: 92, t: 'Deduplicating by MAC/UDN & querying firmware metadata...', l: '[SYNC] Verified 0 duplicates. All devices reachable locally.' },
+        { p: 100, t: `Deep scan complete — ${state.devices.length} Wemo devices online.`, l: '[DONE] Local cache updated in 1.84s (0 cloud packets sent).' }
+      ];
+
+      steps.forEach((step, idx) => {
+        setTimeout(() => {
+          bar.style.width = `${step.p}%`;
+          pct.textContent = `${step.p}%`;
+          status.textContent = step.t;
+          const line = document.createElement('div');
+          line.innerHTML = `<span class="text-emerald-400">&gt;</span> ${step.l}`;
+          log.appendChild(line);
+          log.scrollTop = log.scrollHeight;
+          if (idx === steps.length - 1) {
+            state.isScanning = false;
+            showToast(`Subnet sweep complete: ${state.devices.length} devices verified.`, 'cyan');
+          }
+        }, (idx + 1) * 420);
+      });
+    });
+
+    // =========================================================================
+    // 6. DEVICE INSPECTOR & HOMEKIT CODE EXTRACTOR MODAL
+    // =========================================================================
+    function openInspector(deviceId) {
+      const dev = state.devices.find(d => d.id === deviceId);
+      if (!dev) return;
+      state.inspectedDeviceId = deviceId;
+
+      document.getElementById('inspName').textContent = dev.name;
+      document.getElementById('inspLed').className = `w-2.5 h-2.5 rounded-full ${dev.on ? 'bg-emerald-400 led-pulse' : 'bg-slate-600'}`;
+      document.getElementById('inspIp').textContent = dev.ip;
+      document.getElementById('inspMac').textContent = dev.mac;
+      document.getElementById('inspModel').textContent = `${dev.model} • VLAN ${dev.vlan}`;
+      document.getElementById('inspSerial').textContent = dev.serial;
+      document.getElementById('inspFirmware').textContent = dev.firmware;
+      document.getElementById('inspPinValue').textContent = dev.homekitPin;
+
+      // Hide PIN until Extract button is clicked
+      document.getElementById('homekitPinBox').classList.add('hidden');
+      document.getElementById('extractPinBtn').textContent = 'Extract HomeKit Code';
+      document.getElementById('inspectorModal').classList.remove('hidden');
+    }
+
+    document.getElementById('closeInspectorBtn').addEventListener('click', () => {
+      document.getElementById('inspectorModal').classList.add('hidden');
+      state.inspectedDeviceId = null;
+    });
+
+    document.getElementById('extractPinBtn').addEventListener('click', () => {
+      document.getElementById('homekitPinBox').classList.remove('hidden');
+      document.getElementById('extractPinBtn').textContent = 'PIN Extracted';
+      showToast('HomeKit 8-digit PIN recovered from local firmware!', 'amber');
+    });
+
+    document.getElementById('copyPinBtn').addEventListener('click', () => {
+      const pin = document.getElementById('inspPinValue').textContent;
+      copyText(pin, `HomeKit PIN ${pin} copied!`);
+    });
+
+    document.getElementById('inspToggleBtn').addEventListener('click', () => {
+      if (state.inspectedDeviceId) {
+        toggleDevice(state.inspectedDeviceId);
+        const dev = state.devices.find(d => d.id === state.inspectedDeviceId);
+        showToast(`${dev.name} turned ${dev.on ? 'ON' : 'OFF'}.`, 'green');
+      }
+    });
+
+    // =========================================================================
+    // 7. WI-FI PROVISIONER WIZARD MODAL
+    // =========================================================================
+    function resetProvisionerModal() {
+      ['provStep1', 'provStep2', 'provStep3'].forEach((id, i) => {
+        document.getElementById(id).classList.toggle('hidden', i !== 0);
+      });
+      setProvBadge(1);
+    }
+
+    function setProvBadge(activeStep) {
+      [1, 2, 3].forEach(n => {
+        const badge = document.getElementById(`provStepBadge${n}`);
+        if (n <= activeStep) {
+          badge.className = 'py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold';
+        } else {
+          badge.className = 'py-1.5 rounded-lg bg-slate-900 text-slate-500 border border-slate-800';
+        }
+      });
+    }
+
+    document.getElementById('openProvisionerBtn').addEventListener('click', () => {
+      resetProvisionerModal();
+      document.getElementById('provisionerModal').classList.remove('hidden');
+    });
+
+    document.getElementById('closeProvisionerBtn').addEventListener('click', () => {
+      document.getElementById('provisionerModal').classList.add('hidden');
+    });
+
+    document.getElementById('provNext1').addEventListener('click', () => {
+      document.getElementById('provStep1').classList.add('hidden');
+      document.getElementById('provStep2').classList.remove('hidden');
+      setProvBadge(2);
+    });
+
+    document.getElementById('provNext2').addEventListener('click', () => {
+      const profile = document.getElementById('provWifiProfile').value;
+      const devName = document.getElementById('provDeviceName').value.trim() || 'Patio String Lights';
+      const vlan = profile.includes('IoT') ? 20 : 10;
+      const newIp = vlan === 20 ? `192.168.20.${64 + state.devices.length}` : `192.168.10.${64 + state.devices.length}`;
+
+      // Add newly provisioned device to live state if not already added
+      if (!state.devices.some(d => d.name.toLowerCase() === devName.toLowerCase())) {
+        state.devices.push({
+          id: `dev-${Date.now()}`,
+          name: devName,
+          model: 'Wemo Mini',
+          ip: newIp,
+          vlan: vlan,
+          on: true,
+          mac: '60:38:E0:9F:4C:02',
+          firmware: 'WeMo_WW_2.00.11452.PVT-OWRT-SNSV2',
+          serial: '222199K0109412',
+          homekitPin: '591-40-238',
+          watts: 12.0
+        });
+        renderAllViews();
+      }
+
+      document.getElementById('provResultMsg').textContent = `${devName} joined ${profile} (VLAN ${vlan}) and was auto-discovered at ${newIp}.`;
+      document.getElementById('provStep2').classList.add('hidden');
+      document.getElementById('provStep3').classList.remove('hidden');
+      setProvBadge(3);
+      showToast(`Provisioned "${devName}" offline onto ${profile}!`, 'green');
+    });
+
+    document.getElementById('provFinishBtn').addEventListener('click', () => {
+      document.getElementById('provisionerModal').classList.add('hidden');
+    });
+
+    // =========================================================================
+    // 8. AI MCP SERVER TERMINAL SIMULATOR
+    // =========================================================================
+    function appendMcpLog(html) {
+      const log = document.getElementById('mcpTerminalLog');
+      const div = document.createElement('div');
+      div.innerHTML = html;
+      log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function executeMcpCommand(promptText) {
+      const q = promptText.trim();
+      if (!q) return;
+      const lower = q.toLowerCase();
+
+      appendMcpLog(`<div class="text-white"><span class="text-cyan-400">USER &gt;</span> ${q}</div>`);
+
+      // Parse natural language commands and mutate shared reactive state
+      if (lower.includes('vlan 20') && (lower.includes('off') || lower.includes('turn off'))) {
+        const affected = state.devices.filter(d => d.vlan === 20);
+        affected.forEach(d => d.on = false);
+        renderAllViews();
+        appendMcpLog(`
+          <div class="pl-3 border-l-2 border-amber-500/60 text-slate-300 space-y-1">
+            <div class="text-amber-300">MCP tools/call &rarr; set_vlan_power({"vlan": 20, "state": "OFF"})</div>
+            <div class="text-emerald-400">OK: Powered OFF ${affected.length} devices on VLAN 20 (${affected.map(d => d.name).join(', ')}).</div>
+          </div>
+        `);
+      } else if (lower.includes('vlan 20') && lower.includes('on')) {
+        const affected = state.devices.filter(d => d.vlan === 20);
+        affected.forEach(d => d.on = true);
+        renderAllViews();
+        appendMcpLog(`
+          <div class="pl-3 border-l-2 border-amber-500/60 text-slate-300 space-y-1">
+            <div class="text-amber-300">MCP tools/call &rarr; set_vlan_power({"vlan": 20, "state": "ON"})</div>
+            <div class="text-emerald-400">OK: Powered ON ${affected.length} devices on VLAN 20.</div>
+          </div>
+        `);
+      } else if (lower.includes('all') && (lower.includes('off') || lower.includes('on'))) {
+        const turnOn = lower.includes(' on') && !lower.includes('off');
+        state.devices.forEach(d => d.on = turnOn);
+        renderAllViews();
+        appendMcpLog(`
+          <div class="pl-3 border-l-2 border-amber-500/60 text-slate-300 space-y-1">
+            <div class="text-amber-300">MCP tools/call &rarr; set_all_devices({"state": "${turnOn ? 'ON' : 'OFF'}"})</div>
+            <div class="text-emerald-400">OK: All ${state.devices.length} Wemo devices switched ${turnOn ? 'ON' : 'OFF'}.</div>
+          </div>
+        `);
+      } else if (lower.includes('homekit') || lower.includes('pin')) {
+        const target = state.devices.find(d => lower.includes(d.name.toLowerCase())) || state.devices[0];
+        appendMcpLog(`
+          <div class="pl-3 border-l-2 border-cyan-500/60 text-slate-300 space-y-1">
+            <div class="text-amber-300">MCP tools/call &rarr; extract_homekit_pin({"ip": "${target.ip}"})</div>
+            <div class="text-cyan-300">RESULT: {"device": "${target.name}", "homekit_pin": "${target.homekitPin}", "mac": "${target.mac}"}</div>
+          </div>
+        `);
+      } else if (lower.includes('status') || lower.includes('network') || lower.includes('list')) {
+        const summary = state.devices.map(d => `${d.name} [${d.ip}/VLAN${d.vlan}]: ${d.on ? 'ON' : 'OFF'}`).join('<br/>');
+        appendMcpLog(`
+          <div class="pl-3 border-l-2 border-emerald-500/60 text-slate-300 space-y-1">
+            <div class="text-amber-300">MCP tools/call &rarr; get_network_status({})</div>
+            <div class="text-slate-200">${summary}</div>
+          </div>
+        `);
+      } else {
+        // Match individual device by name
+        const target = state.devices.find(d => lower.includes(d.name.toLowerCase().split(' ')[0]) || lower.includes(d.name.toLowerCase()));
+        if (target) {
+          const turnOff = lower.includes('off');
+          const turnOn = lower.includes('on');
+          const newState = turnOff ? false : (turnOn ? true : !target.on);
+          toggleDevice(target.id, newState);
+          appendMcpLog(`
+            <div class="pl-3 border-l-2 border-emerald-500/60 text-slate-300 space-y-1">
+              <div class="text-amber-300">MCP tools/call &rarr; set_device_state({"ip": "${target.ip}", "state": "${newState ? 'ON' : 'OFF'}"})</div>
+              <div class="text-emerald-400">OK: ${target.name} (${target.ip}) is now ${newState ? 'ON' : 'OFF'}.</div>
+            </div>
+          `);
+        } else {
+          appendMcpLog(`
+            <div class="pl-3 border-l-2 border-slate-600 text-slate-400">
+              AI Assistant: Try mentioning a device name (e.g., "Turn on Espresso Machine", "Turn off all devices on VLAN 20", or "Show network status").
+            </div>
+          `);
+        }
+      }
+    }
+
+    document.querySelectorAll('.mcp-chip').forEach(chip => {
+      chip.addEventListener('click', () => executeMcpCommand(chip.dataset.prompt));
+    });
+
+    document.getElementById('mcpForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const input = document.getElementById('mcpInput');
+      executeMcpCommand(input.value);
+      input.value = '';
+    });
+
+    document.getElementById('clearTerminalBtn').addEventListener('click', () => {
+      document.getElementById('mcpTerminalLog').innerHTML = '<div class="text-slate-500">[LOG CLEARED] Ready for local MCP commands.</div>';
+    });
+
+    // =========================================================================
+    // 9. QUICK DEPLOY TABS & MOBILE NAV
+    // =========================================================================
+    document.querySelectorAll('.deploy-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.deployTab;
+        document.querySelectorAll('.deploy-tab-btn').forEach(b => {
+          b.className = 'deploy-tab-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-mono font-semibold bg-slate-900 text-slate-400 border border-slate-700 hover:text-white';
+        });
+        btn.className = 'deploy-tab-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-mono font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/50';
+
+        document.querySelectorAll('.deploy-panel').forEach(p => p.classList.add('hidden'));
+        document.getElementById(`deployPanel-${target}`).classList.remove('hidden');
+      });
+    });
+
+    document.getElementById('mobileMenuBtn').addEventListener('click', () => {
+      document.getElementById('mobileMenu').classList.toggle('hidden');
+    });
+
+    // =========================================================================
+    // 10. HERO HTML5 CANVAS — ANIMATED IOT VLAN & SIGNAL PULSE NETWORK
+    // =========================================================================
+    (function initHeroCanvas() {
+      const canvas = document.getElementById('heroCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      let nodes = [];
+      let pulses = [];
+
+      function resizeCanvas() {
+        const rect = canvas.parentElement.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+        buildNodes();
+      }
+
+      function buildNodes() {
+        const count = Math.min(34, Math.max(16, Math.floor(canvas.width / 46)));
+        nodes = [];
+        for (let i = 0; i < count; i++) {
+          const isHub = i < 3;
+          nodes.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            vx: (Math.random() - 0.5) * (isHub ? 0.22 : 0.38),
+            vy: (Math.random() - 0.5) * (isHub ? 0.22 : 0.38),
+            r: isHub ? 4.2 : 2.2 + Math.random() * 1.4,
+            color: i % 5 === 0 ? '#06B6D4' : (i % 7 === 0 ? '#F59E0B' : '#10B981'),
+            isHub
+          });
+        }
+      }
+
+      function spawnPulse() {
+        if (nodes.length < 2) return;
+        const a = nodes[Math.floor(Math.random() * nodes.length)];
+        const b = nodes[Math.floor(Math.random() * nodes.length)];
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        if (a !== b && dist < 240) {
+          pulses.push({ a, b, t: 0, speed: 0.015 + Math.random() * 0.015, color: a.color });
+        }
+      }
+
+      function animate() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Update & draw connections
+        for (let i = 0; i < nodes.length; i++) {
+          const n = nodes[i];
+          n.x += n.vx;
+          n.y += n.vy;
+          if (n.x < 10 || n.x > canvas.width - 10) n.vx *= -1;
+          if (n.y < 10 || n.y > canvas.height - 10) n.vy *= -1;
+
+          for (let j = i + 1; j < nodes.length; j++) {
+            const m = nodes[j];
+            const dist = Math.hypot(n.x - m.x, n.y - m.y);
+            if (dist < 190) {
+              const alpha = (1 - dist / 190) * 0.24;
+              ctx.strokeStyle = `rgba(16, 185, 129, ${alpha.toFixed(3)})`;
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              ctx.moveTo(n.x, n.y);
+              ctx.lineTo(m.x, m.y);
+              ctx.stroke();
+            }
+          }
+        }
+
+        // Draw LAN data pulses traveling between IoT nodes
+        if (Math.random() < 0.08 && pulses.length < 12) spawnPulse();
+        for (let i = pulses.length - 1; i >= 0; i--) {
+          const p = pulses[i];
+          p.t += p.speed;
+          if (p.t >= 1) {
+            pulses.splice(i, 1);
+            continue;
+          }
+          const px = p.a.x + (p.b.x - p.a.x) * p.t;
+          const py = p.a.y + (p.b.y - p.a.y) * p.t;
+          ctx.beginPath();
+          ctx.arc(px, py, 2.6, 0, Math.PI * 2);
+          ctx.fillStyle = p.color;
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = p.color;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+
+        // Draw IoT nodes
+        for (const n of nodes) {
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+          ctx.fillStyle = n.color;
+          ctx.shadowBlur = n.isHub ? 14 : 6;
+          ctx.shadowColor = n.color;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+
+        requestAnimationFrame(animate);
+      }
+
+      window.addEventListener('resize', resizeCanvas);
+      window.addEventListener('load', () => {
+        resizeCanvas();
+        animate();
+      });
+      // Immediate fallback init
+      resizeCanvas();
+    })();
+
+    // Initial UI Render
+    renderAllViews();
+  </script>
+</body>
+</html>
