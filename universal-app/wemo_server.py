@@ -12,6 +12,7 @@ import requests
 from flask import Flask, render_template, jsonify, request
 from waitress import serve
 from pywemo.ouimeaux_device.dimmer import Dimmer
+from pywemo.ouimeaux_device.insight import Insight
 
 # --- CONFIGURATION ---
 VERSION = "v5.3.1-Server"
@@ -441,6 +442,16 @@ def index(): return render_template("index.html", version=VERSION)
 def api_status():
     return jsonify({"status": "online", "scan_status": scan_status, "device_count": len(device_registry), "version": VERSION})
 
+def insight_readings(dev):
+    """Power readings for Insight plugs (GitHub issue 27), from the values the
+    poller already fetched: no extra network call. {} for other devices."""
+    if not isinstance(dev, Insight): return {}
+    try:
+        return {"power_w": round(dev.current_power_watts, 1),
+                "today_kwh": round(dev.today_kwh, 3)}
+    except Exception:
+        return {}
+
 @app.route('/api/devices')
 def api_devices():
     devs_out = []
@@ -451,7 +462,8 @@ def api_devices():
             "state": data.get("state", 0),
             "mac": data.get("mac"),
             "serial": data.get("serial"),
-            "type": data.get("type", "switch") # [NEW] Return device type
+            "type": data.get("type", "switch"), # [NEW] Return device type
+            **insight_readings(data.get("obj"))
         })
     return jsonify(devs_out)
 

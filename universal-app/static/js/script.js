@@ -39,6 +39,11 @@ let cachedDevices = [];
 let cachedSchedules = [];
 let currentSettings = { subnets: [] };
 
+// Insight plugs (GitHub issue 27)
+function powerText(d) {
+  return `${d.power_w.toFixed(1)} W now · ${d.today_kwh.toFixed(2)} kWh today`;
+}
+
 // --- DASHBOARD LOGIC ---
 async function updateDashboard() {
   try {
@@ -82,6 +87,7 @@ async function updateDashboard() {
                     <div>
                         <div style="font-weight:bold; font-size:1.1rem;">${d.name}</div>
                         <div style="font-size:0.8rem; color:var(--subtext);">${d.ip}</div>
+                        ${d.power_w != null ? `<div id="pw-${d.name.replace(/\s+/g, "-")}" style="font-size:0.85rem; margin-top:4px;">${powerText(d)}</div>` : ""}
                     </div>
                     <button id="btn-${d.name.replace(/\s+/g, "-")}" class="btn btn-toggle ${d.state > 0 ? "on" : ""}" onclick="toggle('${d.name}')">
                         ${d.state > 0 ? "ON" : "OFF"}
@@ -101,6 +107,10 @@ async function updateDashboard() {
             btn.className = `btn btn-toggle ${isOn ? "on" : ""}`;
             btn.innerText = isOn ? "ON" : "OFF";
           }
+        }
+        if (d.power_w != null) {
+          const pw = document.getElementById("pw-" + d.name.replace(/\s+/g, "-"));
+          if (pw) pw.innerText = powerText(d);
         }
         // Update slider value if it exists and user isn't currently dragging it (hard to detect, so standard sync)
         if (d.type === "dimmer") {

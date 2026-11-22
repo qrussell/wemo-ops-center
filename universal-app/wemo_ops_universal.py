@@ -1,6 +1,7 @@
 import customtkinter as ctk
 import pywemo
 from pywemo.ouimeaux_device.dimmer import Dimmer
+from pywemo.ouimeaux_device.insight import Insight
 import threading
 import sys
 import os
@@ -34,7 +35,11 @@ except Exception as e:
 VERSION = "v5.3.1"
 SERVER_PORT = 5050
 HOOBS_PORT = 8581
-SERVER_URL = f"http://localhost:{SERVER_PORT}"
+LOCAL_SERVER_URL = f"http://localhost:{SERVER_PORT}"
+# Where the desktop app finds the background service. Local by default; can be
+# pointed at a Wemo Ops Server on another machine (GitHub issue 22) through
+# Settings or the WEMO_OPS_SERVER_URL environment variable. See resolve_server_url().
+SERVER_URL = LOCAL_SERVER_URL
 HOOBS_URL = f"http://localhost:{HOOBS_PORT}"
 # All recent releases: /releases/latest can return an MCP server release (mcp-v*)
 UPDATE_API_URL = "https://api.github.com/repos/qrussell/wemo-ops-center/releases?per_page=30"
@@ -159,6 +164,29 @@ class UpdateManager:
                 if newest: return True, newest
         except Exception: pass
         return False, None
+
+# ==============================================================================
+#  SERVER LOCATION
+# ==============================================================================
+def normalize_server_url(url):
+    """'homelab.local' -> 'http://homelab.local:5050'; '' -> ''."""
+    url = (url or "").strip().rstrip("/")
+    if not url: return ""
+    if "://" not in url: url = "http://" + url
+    scheme, rest = url.split("://", 1)
+    host = rest.split("/", 1)[0]
+    if scheme == "http" and ":" not in host.rsplit("]", 1)[-1]:  # no port given (IPv6-safe); https = reverse proxy
+        rest = rest.replace(host, f"{host}:{SERVER_PORT}", 1)
+    return f"{scheme}://{rest}"
+
+def resolve_server_url(settings):
+    """Returns (url, is_remote). The environment variable wins over settings."""
+    env = normalize_server_url(os.environ.get("WEMO_OPS_SERVER_URL", ""))
+    if env: return env, True
+    remote = normalize_server_url(settings.get("server_url", ""))
+    if remote and settings.get("use_local_service", True) is False:
+        return remote, True
+    return LOCAL_SERVER_URL, False
 
 # ==============================================================================
 #  API CLIENT
@@ -513,12 +541,14 @@ class WemoOpsApp(ctk.CTk):
         self._scan_running = False
         self.settings = self.load_json(SETTINGS_FILE, dict)
         self._settings_snapshot = json.loads(json.dumps(self.settings))
+        self.apply_server_url()
         self.profiles = self.load_json(PROFILE_FILE, dict)
         self.schedules = self.load_json(SCHEDULE_FILE, list) or []
         self.saved_subnets = self.settings.get("subnets", [])
         
         self.known_devices_map = {}
         self.device_switches = {} 
+        self.device_power_labels = {}
         self.last_rendered_device_names = [] 
         self.solar = SolarEngine()
         self.scanner = DeepScanner()
@@ -656,13 +686,25 @@ class WemoOpsApp(ctk.CTk):
         active_btn = getattr(self, f"btn_{name}")
         active_btn.configure(fg_color=COLOR_FRAME, text_color=COLOR_TEXT)
 
+    def apply_server_url(self):
+        global SERVER_URL
+        SERVER_URL, self.remote_server = resolve_server_url(self.settings)
+
     def server_heartbeat(self):
         self.api.check_connection()
         try:
-            if self.api.connected:
+            if self.remote_server:
+                # Remote server: never offer to start the local service
+                self.svc_lbl.configure(text="Remote Server:")
+                self.btn_start_svc.pack_forget()
+                if self.api.connected: self.svc_status.configure(text=f"{ICON_OK} CONNECTED", text_color="#28a745")
+                else: self.svc_status.configure(text=f"{ICON_WARN} UNREACHABLE", text_color="orange")
+            elif self.api.connected:
+                self.svc_lbl.configure(text="Service Status:")
                 self.svc_status.configure(text=f"{ICON_OK} RUNNING", text_color="#28a745")
                 self.btn_start_svc.pack_forget()
             else:
+                self.svc_lbl.configure(text="Service Status:")
                 self.svc_status.configure(text=f"{ICON_WARN} STOPPED", text_color="orange")
                 self.btn_start_svc.pack(pady=(5,0), anchor="w")
         except: pass
@@ -797,6 +839,7 @@ class WemoOpsApp(ctk.CTk):
 
     def render_devices(self):
         self.device_switches = {}
+        self.device_power_labels = {}
         current_names = sorted(list(self.known_devices_map.keys()))
         if current_names == self.last_rendered_device_names: return 
         self.last_rendered_device_names = current_names
@@ -850,6 +893,11 @@ class WemoOpsApp(ctk.CTk):
             except: slider.set(0)
             slider.pack(side="right", fill="x", expand=True, padx=10)
 
+        if isinstance(dev, Insight):  # GitHub issue 27
+            pw = ctk.CTkLabel(c, text=self._power_text(dev), font=FONT_BODY, text_color=COLOR_TEXT)
+            pw.pack(anchor="w", padx=10, pady=(0, 5))
+            self.device_power_labels[label] = pw
+
         m = ctk.CTkFrame(c, fg_color="transparent"); m.pack(fill="x", padx=10)
         ctk.CTkLabel(m, text=f"IP: {dev.host} | MAC: {mac} | SN: {serial}", font=FONT_MONO, text_color=COLOR_SUBTEXT).pack(anchor="w")
         
@@ -862,6 +910,11 @@ class WemoOpsApp(ctk.CTk):
         
         def extract_hk(): threading.Thread(target=self._extract_hk_task, args=(dev,), daemon=True).start()
         ctk.CTkButton(bot, text="Get HomeKit Code", width=120, height=24, fg_color=COLOR_BTN_SECONDARY, text_color=COLOR_BTN_TEXT, command=extract_hk).pack(side="left")
+
+    @staticmethod
+    def _power_text(dev):
+        try: return f"Power: {dev.current_power_watts:.1f} W  |  Today: {dev.today_kwh:.2f} kWh"
+        except Exception: return "Power: --"
 
     def _rename_task(self, dev, new_name):
         try:
@@ -1057,11 +1110,18 @@ class WemoOpsApp(ctk.CTk):
                 for name, dev in self.known_devices_map.items():
                     if name in self.device_switches:
                         try:
-                            state = dev.get_state(force_update=True)
+                            state = dev.get_state(force_update=True)  # Insight: also refreshes power readings
                             self.after(0, lambda n=name, s=state: self._update_switch_safe(n, s))
+                            if name in self.device_power_labels:
+                                txt = self._power_text(dev)
+                                self.after(0, lambda n=name, t=txt: self._update_power_safe(n, t))
                         except: pass
             except: pass
             time.sleep(2) 
+
+    def _update_power_safe(self, name, text):
+        try: self.device_power_labels[name].configure(text=text)
+        except Exception: pass
 
     def _update_switch_safe(self, name, state):
         if name in self.device_switches:
@@ -1323,7 +1383,7 @@ class WemoOpsApp(ctk.CTk):
         
         r2 = ctk.CTkFrame(c, fg_color="transparent"); r2.pack(fill="x", padx=20, pady=10)
         ctk.CTkLabel(r2, text="UI Scaling:", font=FONT_BODY, text_color=COLOR_TEXT).pack(side="left")
-        ctk.CTkComboBox(r2, values=["80%", "90%", "100%", "110%", "120%", "150%"], command=self.change_scaling, variable=ctk.StringVar(value=self.settings.get("scale", "100%")), width=150).pack(side="right")
+        ctk.CTkComboBox(r2, values=["80%", "90%", "100%", "110%", "120%", "150%", "175%", "200%"], command=self.change_scaling, variable=ctk.StringVar(value=self.settings.get("scale", "100%")), width=150).pack(side="right")
 
         r3 = ctk.CTkFrame(c, fg_color="transparent"); r3.pack(fill="x", padx=20, pady=(10, 0))
         ctk.CTkLabel(r3, text="Deep-scan all connected networks every 5 min:", font=FONT_BODY, text_color=COLOR_TEXT).pack(side="left")
@@ -1331,6 +1391,28 @@ class WemoOpsApp(ctk.CTk):
         ctk.CTkSwitch(r3, text="", variable=self.periodic_scan_var, command=self.change_periodic_full_scan).pack(side="right")
         ctk.CTkLabel(c, text="Background service. Off: connected networks are deep-scanned at startup and on Scan; saved subnets every 5 min.",
                      font=("Arial", 11), text_color=COLOR_SUBTEXT, wraplength=600, justify="left").pack(anchor="w", padx=20, pady=(0, 10))
+
+        # --- Server location (GitHub issue 22) ---
+        s = ctk.CTkFrame(f, fg_color=COLOR_CARD); s.pack(fill="x", pady=10, padx=5)
+        ctk.CTkLabel(s, text="Background Service", font=FONT_H2, text_color=COLOR_TEXT).pack(anchor="w", padx=20, pady=(15, 5))
+        r4 = ctk.CTkFrame(s, fg_color="transparent"); r4.pack(fill="x", padx=20, pady=5)
+        ctk.CTkLabel(r4, text="Use the background service on this computer:", font=FONT_BODY, text_color=COLOR_TEXT).pack(side="left")
+        self.use_local_var = ctk.BooleanVar(value=self.settings.get("use_local_service", True) is not False)
+        ctk.CTkSwitch(r4, text="", variable=self.use_local_var, command=self.toggle_server_inputs).pack(side="right")
+        r5 = ctk.CTkFrame(s, fg_color="transparent"); r5.pack(fill="x", padx=20, pady=5)
+        ctk.CTkLabel(r5, text="Remote server URL:", font=FONT_BODY, text_color=COLOR_TEXT).pack(side="left")
+        self.btn_server_save = ctk.CTkButton(r5, text="Save & Test", width=110, command=self.save_server_url)
+        self.btn_server_save.pack(side="right", padx=(10, 0))
+        self.server_url_entry = ctk.CTkEntry(r5, placeholder_text="http://homelab.local:5050", width=280)
+        self.server_url_entry.pack(side="right")
+        if self.settings.get("server_url"): self.server_url_entry.insert(0, self.settings["server_url"])
+        self.server_test_lbl = ctk.CTkLabel(s, text="", font=FONT_BODY, text_color=COLOR_SUBTEXT)
+        self.server_test_lbl.pack(anchor="w", padx=20)
+        hint = ("Turn this off to use a Wemo Ops Server running on another machine (Docker, Raspberry Pi, Linux server) "
+                "for schedules and the mobile web app. The server has no login: use it only on your home network, never port-forward it.")
+        if os.environ.get("WEMO_OPS_SERVER_URL"): hint = f"Set by WEMO_OPS_SERVER_URL ({SERVER_URL}). " + hint
+        ctk.CTkLabel(s, text=hint, font=("Arial", 11), text_color=COLOR_SUBTEXT, wraplength=600, justify="left").pack(anchor="w", padx=20, pady=(0, 15))
+        self.toggle_server_inputs(save=False)
 
     def change_theme(self, m): ctk.set_appearance_mode(m); self.settings["theme"]=m; self.save_json(SETTINGS_FILE, self.settings)
     def change_periodic_full_scan(self):
@@ -1344,9 +1426,39 @@ class WemoOpsApp(ctk.CTk):
 
     def change_scaling(self, s): self.set_ui_scale(s); self.settings["scale"]=s; self.save_json(SETTINGS_FILE, self.settings)
 
+    def toggle_server_inputs(self, save=True):
+        local = bool(self.use_local_var.get())
+        state = "disabled" if local else "normal"
+        self.server_url_entry.configure(state=state); self.btn_server_save.configure(state=state)
+        if not save: return
+        if local:
+            self.settings["use_local_service"] = True; self.save_json(SETTINGS_FILE, self.settings)
+            self.apply_server_url(); self.server_test_lbl.configure(text="Using the service on this computer.", text_color=COLOR_SUBTEXT)
+        else:
+            self.server_test_lbl.configure(text="Enter the server's address, then Save & Test.", text_color=COLOR_SUBTEXT)
+
+    def save_server_url(self):
+        url = normalize_server_url(self.server_url_entry.get())
+        if not url: return self.server_test_lbl.configure(text="Enter an address such as http://homelab.local:5050", text_color="orange")
+        self.server_url_entry.delete(0, "end"); self.server_url_entry.insert(0, url)
+        self.settings["server_url"] = url; self.settings["use_local_service"] = False
+        self.save_json(SETTINGS_FILE, self.settings); self.apply_server_url()
+        self.server_test_lbl.configure(text="Testing...", text_color=COLOR_SUBTEXT)
+        def test():
+            try:
+                ok = requests.get(f"{url}/api/status", timeout=3).status_code == 200
+                msg, col = ("Connected to the remote server.", "#28a745") if ok else ("The server answered with an error.", "orange")
+            except Exception:
+                msg, col = ("Can't reach that server. Check the address and that port 5050 is open.", "orange")
+            self.after(0, lambda: self.server_test_lbl.configure(text=msg, text_color=col))
+        threading.Thread(target=test, daemon=True).start()
+
     def show_qr_code(self):
         try:
-            ip = NetworkUtils.get_local_ip(); url = f"http://{ip}:{SERVER_PORT}"
+            if self.remote_server and not re.search(r"://(localhost|127\.0\.0\.1)[:/]", SERVER_URL + "/"):
+                url = SERVER_URL
+            else:
+                ip = NetworkUtils.get_local_ip(); url = f"http://{ip}:{SERVER_PORT}"
             qr = qrcode.QRCode(box_size=10, border=4); qr.add_data(url); qr.make(fit=True)
             img = ctk.CTkImage(light_image=qr.make_image(fill_color="black", back_color="white").convert("RGB"), dark_image=qr.make_image(fill_color="black", back_color="white").convert("RGB"), size=(250, 250))
             win = ctk.CTkToplevel(self); win.title("Mobile App"); win.geometry("400x480"); win.transient(self); win.focus_force(); self.set_icon(win)
