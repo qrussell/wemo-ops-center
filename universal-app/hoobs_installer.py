@@ -4,8 +4,15 @@ import subprocess
 import platform
 import shutil
 import urllib.request
+import urllib.error
 import tempfile
 import getpass
+import time
+
+HB_UI_PORT = 8581
+# hb-service install starts the service and then waits for the Homebridge UI;
+# if the service never comes up it can sit there indefinitely (GitHub issue 31).
+HB_SERVICE_TIMEOUT = 180
 
 def print_header():
     print("=======================================================")
@@ -24,8 +31,14 @@ def check_command(command):
     refresh_paths()
     return shutil.which(command) is not None
 
-def run_command(command, shell=False, sudo=False):
-    if sudo and sys.platform != "win32":
+def is_root():
+    return hasattr(os, "geteuid") and os.geteuid() == 0
+
+def run_command(command, shell=False, sudo=False, timeout=None):
+    """Run a command, showing its output. Returns True on success, False on
+    failure, None if it was still running after `timeout` seconds."""
+    # The Linux helper is already started with sudo; a second sudo is pointless
+    if sudo and sys.platform != "win32" and not is_root():
         if isinstance(command, list):
             command = ["sudo"] + command
         else:
@@ -35,11 +48,41 @@ def run_command(command, shell=False, sudo=False):
     print(f"--> Running: {cmd_str}")
     
     try:
-        subprocess.check_call(command, shell=shell)
+        subprocess.run(command, shell=shell, check=True, timeout=timeout)
         return True
-    except subprocess.CalledProcessError:
+    except subprocess.TimeoutExpired:
+        print(f"[!] Still running after {timeout} s, stopped waiting.")
+        return None
+    except (subprocess.CalledProcessError, OSError):
         print(f"XXX Error running command.")
         return False
+
+def homebridge_ui_up(wait=0):
+    """True if the Homebridge UI answers on localhost within `wait` seconds."""
+    deadline = time.time() + wait
+    while True:
+        try:
+            urllib.request.urlopen(f"http://localhost:{HB_UI_PORT}", timeout=3)
+            return True
+        except urllib.error.HTTPError:
+            return True  # it answered, even if with an error page
+        except Exception:
+            if time.time() >= deadline: return False
+            time.sleep(3)
+
+def find_hb_service():
+    """hb-service from PATH, else from npm's global bin folder. sudo's PATH
+    often leaves that folder out; falling back to `npx hb-service` would stop
+    at npx's hidden "Ok to proceed? (y)" prompt."""
+    if check_command("hb-service"): return [shutil.which("hb-service")]
+    try:
+        prefix = subprocess.run(["npm", "prefix", "-g"], capture_output=True, text=True,
+                                shell=(platform.system() == "Windows"), timeout=30).stdout.strip()
+        for cand in (os.path.join(prefix, "bin", "hb-service"), os.path.join(prefix, "hb-service.cmd")):
+            if prefix and os.path.exists(cand): return [cand]
+    except Exception:
+        pass
+    return ["npx", "--yes", "hb-service"]
 
 def auto_install_node():
     """Automatically downloads and installs the official Node.js binaries."""
@@ -164,17 +207,25 @@ def main():
             pass
 
     # 3. Build the hb-service command
-    hb_service_base = ["hb-service"] if check_command("hb-service") else ["npx", "hb-service"]
-    service_cmd = hb_service_base + ["install"]
+    service_cmd = find_hb_service() + ["install"]
     
     # Inject the required user flag on Linux/macOS
     if os_type != "Windows":
         service_cmd.extend(["--user", target_user])
     
-    if run_command(service_cmd, shell=(os_type == "Windows"), sudo=use_sudo):
+    result = run_command(service_cmd, shell=(os_type == "Windows"), sudo=use_sudo, timeout=HB_SERVICE_TIMEOUT)
+    if result is None and homebridge_ui_up(wait=30):
+        result = True  # the service is up; hb-service just didn't return
+    manual = "hb-service install" if os_type == "Windows" else f"sudo hb-service install --user {target_user}"
+    if result:
         print("[+] Service installed and started!")
+    elif result is None:
+        print(f"[!] The Homebridge service didn't start within {HB_SERVICE_TIMEOUT // 60} minutes.")
+        print(f"    Check its log with:  {'hb-service logs' if os_type == 'Windows' else 'sudo hb-service logs'}")
+        print(f"    Common causes: port {HB_UI_PORT} already in use, or an old Node.js version (Homebridge needs Node 20+).")
+        print(f"    Then run it again yourself:  {manual}")
     else:
-        print(f"[!] Service setup failed. You may need to run 'sudo hb-service install --user {target_user}' manually.")
+        print(f"[!] Service setup failed. You may need to run '{manual}' manually.")
 
     print("\n" + "="*50)
     print("   INSTALLATION COMPLETE")
