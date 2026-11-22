@@ -19,6 +19,8 @@ Wemo Ops Center is a completely local, offline provisioning and automation suite
 
 > **New in v5.4.0:** use the desktop app with a Wemo Ops Server on another machine, power readings for Insight plugs, a Windows installer that installs to Program Files and lets phones reach the web app, and 175%/200% UI scaling. See the [v5.4.0 release notes](release-notes/v5.4.0.md).
 
+> **Coming in the next release:** device clock sync (fixes schedules stored on the plug running at the wrong time), a Windows build that no longer trips Microsoft Defender's machine-learning check, and a Homebridge installer that no longer hangs at "Starting Homebridge Service".
+
 ## 🚀 Choose Your Edition
 
 | Feature | 🖥️ Desktop App (GUI) | ⚙️ Server App (Headless) | 🤖 MCP Server (AI) |
@@ -51,7 +53,7 @@ No Python installation required.
    | Linux | Use the [package repository](#-installation-linux) (recommended), or download the `.deb` / `.rpm` |
 
 2. **Provisioner:** Follow the on-screen instructions to scan for and configure your Wemo devices.
-3. **Dashboard:** Scan Network, Control Devices, and Rename Devices. IP, MAC, FW version, serial number, and HomeKit code are displayed.
+3. **Dashboard:** Scan your network, switch devices on and off, dim Dimmers, rename devices and get HomeKit codes. Each device shows its IP, MAC address and serial number; Insight plugs also show their power use.
 
 Each release includes `SHA256SUMS.txt`. Verify a download with:
 ```bash
@@ -69,67 +71,89 @@ When you launch `WemoOps.exe` for the first time, you may see a blue warning fro
 
 From v5.4.0 the installer asks for administrator rights and installs to `C:\Program Files\WemoOps` (you can pick another folder, or "install for me only"). Your settings and schedules stay in `%APPDATA%\WemoOps`. It also adds a Windows Firewall rule so phones on your home network can open the mobile web app.
 
-If Microsoft Defender reports `Trojan:Win32/Bearfoos.A!ml` or a similar `!ml` detection, that is a false positive from its machine-learning model on unsigned Python apps (see [#33](https://github.com/qrussell/wemo-ops-center/issues/33)). Check your download against `SHA256SUMS.txt` on the release page.
+If Microsoft Defender reports `Trojan:Win32/Bearfoos.A!ml` or a similar `!ml` detection, that is a false positive from its machine-learning model on unsigned Python apps (see [#33](https://github.com/qrussell/wemo-ops-center/issues/33)). Check your download against `SHA256SUMS.txt` on the release page. From the next release the Windows app is built as a folder of files instead of self-extracting `.exe` files, which is what that check reacted to; a Defender scan of the installed app comes back clean.
 
 ## 🍎 First Launch on macOS
 Open the DMG and run **Install_WemoOps.command**, or drag **WemoOps** to Applications. If macOS asks whether to open an app from an unidentified developer, right-click (or Control-click) **WemoOps** → **Open** → **Open**. You only need to do this once.
 
 # Screenshots of the Wemo Ops Center Desktop App
+
+_Screenshots use simulated devices._
+
 <table>
   <tr>
     <th width="50%">Light Mode</th>
     <th width="50%">Dark Mode</th>
   </tr>
   <tr>
-    <td><img src="https://github.com/user-attachments/assets/f27064bc-6aea-49b5-8c86-c4b3d711cfe3" width="100%"></td>
-    <td><img src="https://github.com/user-attachments/assets/c82bc543-431c-4ab3-aec9-286bbdd85fcb" width="100%"></td>
-</tr>
+    <td colspan="2"><b>Dashboard:</b> Every device on your networks, with power switches, a brightness slider for Dimmers and power readings for Insight plugs.</td>
+  </tr>
   <tr>
-    <td><img src="https://github.com/user-attachments/assets/36bc246b-f470-4049-ab14-1b2b1934baf9" width="100%"></td>
-    <td><img src="https://github.com/user-attachments/assets/b938e228-f0b1-462a-b3a5-38f1cb567306" width="100%"></td>
-</tr>
-<tr>    
-    <td><img src="https://github.com/user-attachments/assets/c5660483-e082-46c3-8290-3c16320a23a9" width="100%"></td>
-    <td><img src="https://github.com/user-attachments/assets/0b09e4e7-12eb-46bc-b669-085fbbf18225" width="100%"></td>
-</tr>
-<tr>    
-    <td><img src="https://github.com/user-attachments/assets/e404b585-71c5-41be-8794-dc484d909e1c" width="100%"></td>
-    <td><img src="https://github.com/user-attachments/assets/03ab35aa-f8e7-4a53-93e5-658d1d689e64" width="100%"></td>
-</tr>
-<tr>    
-<td><img src="https://github.com/user-attachments/assets/dfbe3950-311b-4791-a306-8fb8d40087ab" width="100%"></td>
-    <td><img src="https://github.com/user-attachments/assets/574d2e02-a732-4ae1-9daf-749493197ea1" width="100%"></td>
-</tr>
-<tr>    
-    <td><img src="https://github.com/user-attachments/assets/aa54231a-037e-43ed-8592-b7b0bc751f99" width="100%"></td>
-    <td><img src="https://github.com/user-attachments/assets/c1c62088-b9e9-4116-afe5-838a8fc420dd" width="100%"></td>
+    <td><img src="assets/screenshots/desktop-dashboard-light.png" alt="Dashboard, light mode" width="100%"></td>
+    <td><img src="assets/screenshots/desktop-dashboard-dark.png" alt="Dashboard, dark mode" width="100%"></td>
+  </tr>
+  <tr>
+    <td colspan="2"><b>Provisioner:</b> Find Wemo devices in setup mode and send them your Wi-Fi settings, no cloud needed.</td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/desktop-provisioner-light.png" alt="Provisioner, light mode" width="100%"></td>
+    <td><img src="assets/screenshots/desktop-provisioner-dark.png" alt="Provisioner, dark mode" width="100%"></td>
+  </tr>
+  <tr>
+    <td colspan="2"><b>Automation:</b> Fixed-time and sunrise/sunset schedules, run by the background service.</td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/desktop-automation-light.png" alt="Automation, light mode" width="100%"></td>
+    <td><img src="assets/screenshots/desktop-automation-dark.png" alt="Automation, dark mode" width="100%"></td>
+  </tr>
+  <tr>
+    <td colspan="2"><b>Maintenance:</b> Reset a device's data or Wi-Fi, factory reset it, or set its clock.</td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/desktop-maintenance-light.png" alt="Maintenance, light mode" width="100%"></td>
+    <td><img src="assets/screenshots/desktop-maintenance-dark.png" alt="Maintenance, dark mode" width="100%"></td>
+  </tr>
+  <tr>
+    <td colspan="2"><b>Integrations:</b> Generate a Homebridge/HOOBS config and install the Homebridge compatibility layer.</td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/desktop-integrations-light.png" alt="Integrations, light mode" width="100%"></td>
+    <td><img src="assets/screenshots/desktop-integrations-dark.png" alt="Integrations, dark mode" width="100%"></td>
+  </tr>
+  <tr>
+    <td colspan="2"><b>Settings:</b> Appearance, UI scaling up to 200%, network scanning, daily clock sync and a remote server.</td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/desktop-settings-light.png" alt="Settings, light mode" width="100%"></td>
+    <td><img src="assets/screenshots/desktop-settings-dark.png" alt="Settings, dark mode" width="100%"></td>
   </tr>
 </table>
 
 # Screenshots of the Wemo Ops Mobile App
 
+The mobile web app is served by the background service (desktop app) or Wemo Ops Server. Open it from the **Mobile App** QR code in the desktop app, or at `http://<computer-or-server-ip>:5050`.
+
 <table>
   <tr>
-    <th width="50%">Light Mode</th>
-    <th width="50%">Dark Mode</th>
+    <th width="33%">Home</th>
+    <th width="33%">Rules</th>
+    <th width="33%">Setup</th>
   </tr>
   <tr>
-    <td><img src="https://github.com/user-attachments/assets/b78f4831-b7c2-44aa-8a7f-0bcf336652e6" width="100%"></td>
-    <td><img src="https://github.com/user-attachments/assets/c0083f30-aa40-4941-a0a8-884c2bcdcb45" width="100%"></td>
+    <td><img src="assets/screenshots/web-devices-light.png" alt="Mobile web app, devices, light mode" width="100%"></td>
+    <td><img src="assets/screenshots/web-rules-light.png" alt="Mobile web app, rules, light mode" width="100%"></td>
+    <td><img src="assets/screenshots/web-setup-light.png" alt="Mobile web app, setup, light mode" width="100%"></td>
   </tr>
   <tr>
-    <td><img src="https://github.com/user-attachments/assets/2a4a1471-2138-4c85-9a88-9dbe1e25718d" width="100%"></td>
-    <td><img src="https://github.com/user-attachments/assets/a1d1c3c0-5767-4757-80c9-e9166b73b590" width="100%"></td>
-  </tr>
-  <tr>    
-    <td><img src="https://github.com/user-attachments/assets/3a13f18e-cfbe-4a2c-be1a-63f13c274019" width="100%"></td>
-    <td><img src="https://github.com/user-attachments/assets/18f26f83-a645-485f-bd51-a984cfc99169" width="100%"></td>
+    <td><img src="assets/screenshots/web-devices-dark.png" alt="Mobile web app, devices, dark mode" width="100%"></td>
+    <td><img src="assets/screenshots/web-rules-dark.png" alt="Mobile web app, rules, dark mode" width="100%"></td>
+    <td><img src="assets/screenshots/web-setup-dark.png" alt="Mobile web app, setup, dark mode" width="100%"></td>
   </tr>
 </table>
 
 ---
 **Go to the [Releases Page](../../releases) and download.**
-## 🚀 Key Features (v5.4.0)
+## 🚀 Key Features
 
 ### 1. 📡 Universal Provisioner
 * **No Cloud Required:** Connect directly to a new or reset Wemo device's Wi-Fi (`Wemo.Mini.xxx`) and push your Wi-Fi credentials instantly.
@@ -149,17 +173,33 @@ Advanced tools to manage device health directly from the app:
 * **Clear Personal Info:** Removes custom names, icons, and rules.
 * **Clear Wi-Fi:** Wipes network credentials to return the device to "Setup Mode" (Flashing Amber/Blue).
 * **Factory Reset:** Performs a full "Out of Box" wipe.
+* **Device Clock:** Sets a device's clock and time zone from your computer. Use it when schedules or away mode stored on the device itself (for example, made in the old Wemo app) run at the wrong time. Pick a device in the **Device** list and click **Sync Selected Device**, or click **Sync All Devices**. To keep clocks right, turn on **Settings → Keep device clocks in sync (daily)**.
+
+Choose the device in the **Device** list at the top of the page; all the buttons act on it. If no Wemo devices have been found yet, the app says so instead of acting.
 
 ### 4. ☀️ Solar Automation Scheduler
 * **Local Automation:** Runs on your computer as a background service.
 * **Solar Engine:** Automatically detects your latitude/longitude to trigger lights at **Sunrise** or **Sunset**.
 * **Fixed Schedules:** Set standard time-based schedules (e.g., "Turn ON at 18:00").
+* **Pick the Days:** Each schedule runs on the days you tick, with an optional offset before or after sunrise/sunset.
 
 ### 5. 📱 Mobile Web App
 * **Scan the QR Code:** Connect to the mobile web app with your phone or tablet and control your Wemo devices.
 * **Local Control:** The app runs on your local network and connects directly to Wemo devices without the cloud.
 * **Manage Schedules:** Manage schedules from the mobile web app, solar automation, or time-based schedules.
+* **Dimmers and Insight Plugs:** Set brightness with a slider; see an Insight plug's current draw and today's energy use.
+* **Device Clocks:** **Setup → Sync Clocks Now** sets the clock on every device, and **Keep device clocks in sync (daily)** does it once a day.
 * **Remote Server:** Already running Wemo Ops Server on a Raspberry Pi, NAS or in Docker? In the desktop app, go to **Settings → Background Service**, turn off "Use the background service on this computer" and enter the server's address (e.g. `homelab.local:5050`). Schedules, scans and the QR code then use that server. The server has no login: keep it on your home network and don't port-forward it.
+
+### 6. 🏠 Homebridge & HOOBS Integration
+* **Config Generator:** Click **Scan & Generate Config** to get the `BelkinWeMo` platform block for your Homebridge/HOOBS `config.json`, listing the devices the app found.
+* **Compatibility Layer Installer:** **Install Compatibility Layer** installs Homebridge with its web UI (port `8581`) and the `homebridge-wemo` and `homebridge-alexa` plugins, and sets Homebridge up as a service, so Alexa and Google Home can reach your Wemo devices. If the Homebridge service doesn't start within 3 minutes, the installer stops waiting and tells you how to check its log instead of hanging.
+
+### 7. ⚙️ Settings
+* **Appearance:** Light, Dark or System mode, and UI scaling from 80% to 200% for high-resolution screens.
+* **Network Scanning:** Optionally deep-scan all connected networks every 5 minutes.
+* **Device Clock Sync:** Keep every device's clock in sync, once a day.
+* **Background Service:** Use the service on this computer, or a Wemo Ops Server elsewhere (see *Remote Server* above).
 
 ### ⚠️ Disclaimer
 This project is an independent open-source tool and is not affiliated with, endorsed by, or associated with Belkin International, Inc. "Wemo" is a trademark of Belkin International, Inc.
@@ -263,20 +303,14 @@ The repository also has a separate, headless-only `wemo-ops-server` package (v1.
 
 <table>
   <tr>
-    <th width="50%">Dashboard</th>
-    <th width="50%">Settings</th>
+    <th width="33%">Dashboard</th>
+    <th width="33%">Automation</th>
+    <th width="33%">Settings</th>
   </tr>
   <tr>
-    <td><img width="981" height="1137" alt="dashboard-dark" src="https://github.com/user-attachments/assets/e946d2c9-af92-4304-b8dd-d9f3108d7497" /></td>
-    <td><img width="975" height="1135" alt="settings-dark" src="https://github.com/user-attachments/assets/73c6ac96-6ffb-46f8-b0b3-f97b843223e5" /></td>
-  </tr>
-  <tr>
-    <th width="50%">Automation Time</th>
-    <th width="50%">Automation Sunrise/Sunset</th>
-  </tr>
-  <tr>
-    <td><img width="977" height="1137" alt="automation-dark" src="https://github.com/user-attachments/assets/5b5a59fc-6272-43fd-81f6-d601dec3efd2" /></td>
-    <td><img width="1005" height="1136" alt="automation2-dark" src="https://github.com/user-attachments/assets/5eb25162-c369-456c-a7ff-eb303857fde4" /></td>
+    <td><img src="assets/screenshots/web-devices-dark.png" alt="Server web dashboard" width="100%"></td>
+    <td><img src="assets/screenshots/web-rules-dark.png" alt="Server automation rules" width="100%"></td>
+    <td><img src="assets/screenshots/web-setup-dark.png" alt="Server settings" width="100%"></td>
   </tr>
 </table>
 
@@ -287,6 +321,8 @@ The repository also has a separate, headless-only `wemo-ops-server` package (v1.
 * **Any Device Access:** Control your home from your phone, tablet, or another PC via the Web Dashboard.
 
 * **Low Resource Usage:** Optimized to run silently in the background.
+
+* **Device Clocks Kept Right:** Turn on *Keep device clocks in sync (daily)* in Settings and the server sets each device's clock and time zone once a day, so schedules stored on the devices themselves run on time.
 
 * **Network Scanning Your Way:** Connected networks are deep-scanned at startup and when you press **Scan**; saved subnets are re-scanned every 5 minutes. Turn on *Deep-scan all connected networks every 5 min* in Settings for continuous scanning of every network.
 

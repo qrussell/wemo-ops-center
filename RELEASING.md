@@ -35,6 +35,14 @@ bump version → merge to main → push tag vX.Y.Z → CI builds packages → dr
 | macOS 26 Tahoe, Apple Silicon | `macos-26` | `WemoOps_<ver>-1_macos26-apple-silicon.dmg` |
 | macOS 26 Tahoe, Intel | `macos-26-intel` | `WemoOps_<ver>-1_macos26-intel.dmg` |
 
+The Windows app is built as one folder, not as one-file `.exe`s:
+`universal-app/wemo_windows.spec` builds `WemoOps.exe`, `wemo_service.exe` and
+`Wemo_HOOBS_Integration_Setup.exe` into `dist\WemoOps\` with a shared `_internal\`
+folder, and the installer copies that whole folder. One-file executables unpack
+themselves at run time, which Microsoft Defender's machine-learning check flagged as
+`Trojan:Win32/Bearfoos.A!ml` ([#33](https://github.com/qrussell/wemo-ops-center/issues/33)).
+Keep it that way when changing `build_windows.bat`.
+
 Linux packages are built on older distributions on purpose: a PyInstaller binary
 only runs on systems with the same or newer glibc.
 

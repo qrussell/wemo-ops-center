@@ -137,6 +137,7 @@
         <nav class="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
           <a href="#demo" class="hover:text-emerald-400 transition-colors">Live Demo</a>
           <a href="#architecture" class="hover:text-emerald-400 transition-colors">Architecture</a>
+          <a href="#screenshots" class="hover:text-emerald-400 transition-colors">Screenshots</a>
           <a href="#features" class="hover:text-emerald-400 transition-colors">Features</a>
           <a href="#deploy" class="hover:text-emerald-400 transition-colors">Deploy</a>
         </nav>
@@ -162,6 +163,7 @@
       <div id="mobileMenu" class="hidden md:hidden pb-4 pt-2 border-t border-slate-800/80 space-y-2">
         <a href="#demo" class="block px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800/70 hover:text-emerald-400">Live Demo</a>
         <a href="#architecture" class="block px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800/70 hover:text-emerald-400">Architecture</a>
+        <a href="#screenshots" class="block px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800/70 hover:text-emerald-400">Screenshots</a>
         <a href="#features" class="block px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800/70 hover:text-emerald-400">Features</a>
         <a href="#deploy" class="block px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800/70 hover:text-emerald-400">Deploy</a>
         <a href="https://github.com/qrussell/wemo-ops-center/releases" target="_blank" rel="noopener noreferrer"
@@ -323,7 +325,7 @@
             <span class="w-3 h-3 rounded-full bg-rose-500/80"></span>
             <span class="w-3 h-3 rounded-full bg-amber-400/80"></span>
             <span class="w-3 h-3 rounded-full bg-emerald-500/80"></span>
-            <span id="simWindowTitle" class="ml-3 font-mono text-xs text-slate-400">wemo-ops-center v5.3.1 — Local LAN Console</span>
+            <span id="simWindowTitle" class="ml-3 font-mono text-xs text-slate-400">wemo-ops-center v5.4.0 — Local LAN Console</span>
           </div>
           <div class="flex items-center gap-4 text-xs font-mono">
             <span class="flex items-center gap-1.5 text-emerald-400">
@@ -697,6 +699,44 @@
     </div>
   </section>
 
+  <!-- ==================== SCREENSHOTS ==================== -->
+  <section id="screenshots" class="py-20 bg-[#070B14] border-b border-slate-800/80">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center max-w-3xl mx-auto mb-10">
+        <h2 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">See It in Action</h2>
+        <p class="mt-3 text-slate-400 text-sm sm:text-base">The desktop app and the mobile web app (shown with simulated devices). More, in light and dark mode, in the <a href="https://github.com/qrussell/wemo-ops-center#screenshots-of-the-wemo-ops-center-desktop-app" class="text-emerald-400 hover:underline">README</a>.</p>
+      </div>
+      <div class="grid gap-6 md:grid-cols-3 mb-6">
+          <figure class="glass-card rounded-2xl p-3">
+            <img src="https://raw.githubusercontent.com/qrussell/wemo-ops-center/main/assets/screenshots/desktop-dashboard-dark.png" alt="Desktop Dashboard" loading="lazy" class="w-full rounded-xl">
+            <figcaption class="mt-2 text-xs font-mono text-slate-400 text-center">Desktop Dashboard</figcaption>
+          </figure>
+          <figure class="glass-card rounded-2xl p-3">
+            <img src="https://raw.githubusercontent.com/qrussell/wemo-ops-center/main/assets/screenshots/desktop-maintenance-dark.png" alt="Maintenance &amp; device clock" loading="lazy" class="w-full rounded-xl">
+            <figcaption class="mt-2 text-xs font-mono text-slate-400 text-center">Maintenance &amp; device clock</figcaption>
+          </figure>
+          <figure class="glass-card rounded-2xl p-3">
+            <img src="https://raw.githubusercontent.com/qrussell/wemo-ops-center/main/assets/screenshots/desktop-settings-dark.png" alt="Settings" loading="lazy" class="w-full rounded-xl">
+            <figcaption class="mt-2 text-xs font-mono text-slate-400 text-center">Settings</figcaption>
+          </figure>
+      </div>
+      <div class="grid gap-6 grid-cols-3 max-w-3xl mx-auto">
+          <figure class="glass-card rounded-2xl p-3">
+            <img src="https://raw.githubusercontent.com/qrussell/wemo-ops-center/main/assets/screenshots/web-devices-dark.png" alt="Mobile: devices" loading="lazy" class="w-full rounded-xl">
+            <figcaption class="mt-2 text-xs font-mono text-slate-400 text-center">Mobile: devices</figcaption>
+          </figure>
+          <figure class="glass-card rounded-2xl p-3">
+            <img src="https://raw.githubusercontent.com/qrussell/wemo-ops-center/main/assets/screenshots/web-rules-dark.png" alt="Mobile: rules" loading="lazy" class="w-full rounded-xl">
+            <figcaption class="mt-2 text-xs font-mono text-slate-400 text-center">Mobile: rules</figcaption>
+          </figure>
+          <figure class="glass-card rounded-2xl p-3">
+            <img src="https://raw.githubusercontent.com/qrussell/wemo-ops-center/main/assets/screenshots/web-setup-dark.png" alt="Mobile: setup" loading="lazy" class="w-full rounded-xl">
+            <figcaption class="mt-2 text-xs font-mono text-slate-400 text-center">Mobile: setup</figcaption>
+          </figure>
+      </div>
+    </div>
+  </section>
+
   <!-- ==================== CORE CAPABILITIES GRID ==================== -->
   <section id="features" class="py-20 bg-grid-pattern border-b border-slate-800/80">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -774,7 +814,7 @@
           </div>
           <h3 class="text-lg font-bold text-white mb-2">Hardware Rescue &amp; Maintenance</h3>
           <p class="text-sm text-slate-400 leading-relaxed">
-            Clear personal info (names, icons, stale cloud rules), wipe Wi-Fi credentials to re-enter setup mode, execute full factory resets, and export MAC/IP tables for static DHCP reservations.
+            Clear personal info (names, icons, stale cloud rules), wipe Wi-Fi credentials to re-enter setup mode, execute full factory resets, and set each device's clock and time zone so schedules stored on the plug run on time.
           </p>
         </div>
 
@@ -788,6 +828,45 @@
           <h3 class="text-lg font-bold text-white mb-2">Cross-Platform &amp; ARM64 Ready</h3>
           <p class="text-sm text-slate-400 leading-relaxed">
             Automated CI builds cover Windows, macOS, Linux desktops, Raspberry Pi OS (ARM64), and multi-arch Docker containers—running effortlessly on spare Pis, NAS boxes, or daily workstations.
+          </p>
+        </div>
+
+        <!-- Capability 7 -->
+        <div class="glass-card rounded-2xl p-6 transition-all">
+          <div class="w-11 h-11 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center mb-4">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">Device Clock Sync</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            Wemo plugs keep their own clock for schedules and away mode stored on the device. Sync one device or all of them from the desktop app, tap <em>Sync Clocks Now</em> in the mobile web app, or let the background service do it once a day.
+          </p>
+        </div>
+
+        <!-- Capability 8 -->
+        <div class="glass-card rounded-2xl p-6 transition-all">
+          <div class="w-11 h-11 rounded-xl bg-violet-500/15 text-violet-400 flex items-center justify-center mb-4">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">Insight Power &amp; Dimmer Control</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            Insight plugs show their current draw in watts and today's energy in kWh, on the desktop Dashboard and in the mobile web app. Dimmers get a brightness slider in both.
+          </p>
+        </div>
+
+        <!-- Capability 9 -->
+        <div class="glass-card rounded-2xl p-6 transition-all">
+          <div class="w-11 h-11 rounded-xl bg-sky-500/15 text-sky-400 flex items-center justify-center mb-4">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">Mobile Web App &amp; Remote Server</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            Scan a QR code to control devices and schedules from your phone. Point the desktop app at a Wemo Ops Server on a Raspberry Pi, NAS or Docker host and it uses that server's devices and schedules. LAN only: no login, so never port-forward it.
           </p>
         </div>
       </div>
@@ -835,7 +914,7 @@
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <h3 class="text-lg font-bold text-white">Always-On Server via Docker (x86_64 &amp; ARM64)</h3>
-              <p class="text-xs sm:text-sm text-slate-400">Uses <code class="font-mono text-cyan-300">--network host</code> for SSDP multicast discovery and exposes the Mobile Web UI on port <code class="font-mono text-emerald-300">5050</code>.</p>
+              <p class="text-xs sm:text-sm text-slate-400">Uses <code class="font-mono text-cyan-300">--network host</code> for SSDP multicast discovery and exposes the Mobile Web UI on port <code class="font-mono text-emerald-300">5050</code>. Run it on a Linux host (Raspberry Pi, NAS, VM): Docker Desktop on Windows/macOS misses devices, so use the desktop app there. Set <code class="font-mono text-cyan-300">TZ</code> to your time zone so schedules and device clock sync use local time.</p>
             </div>
             <span class="self-start sm:self-center px-2.5 py-1 rounded-lg bg-cyan-500/15 text-cyan-300 font-mono text-xs">Recommended for Homelabs</span>
           </div>
@@ -864,21 +943,23 @@
         <div id="deployPanel-linux" class="deploy-panel hidden p-6 sm:p-8 space-y-5">
           <div>
             <h3 class="text-lg font-bold text-white">Linux Desktop &amp; Raspberry Pi OS (systemd Service)</h3>
-            <p class="text-xs sm:text-sm text-slate-400">Install the native `.deb` / AppImage package or run the background server daemon on Debian, Ubuntu, and Raspberry Pi OS (ARM64).</p>
+            <p class="text-xs sm:text-sm text-slate-400">Install the <code class="font-mono text-cyan-300">wemo-ops</code> package from the qrussell repository (x86-64 and ARM64). It contains the desktop app and the always-on server, which starts as the <code class="font-mono text-cyan-300">wemo-ops-server</code> systemd service.</p>
           </div>
           <div class="relative rounded-2xl bg-[#050810] border border-slate-800 p-4 overflow-x-auto">
             <button onclick="copyCodeBlock('code-linux')" class="absolute top-3 right-3 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-emerald-500 hover:text-slate-950 text-xs font-mono text-slate-300 transition-colors">
               Copy
             </button>
-            <pre id="code-linux" class="font-mono text-xs sm:text-sm text-slate-200 leading-relaxed pr-16"><span class="text-slate-500"># Clone and run from source, or install .deb from GitHub Releases</span>
-<span class="text-cyan-400">git clone</span> https://github.com/qrussell/wemo-ops-center.git
-<span class="text-cyan-400">cd</span> wemo-ops-center
-<span class="text-cyan-400">python3</span> -m venv .venv &amp;&amp; <span class="text-cyan-400">source</span> .venv/bin/activate
-<span class="text-cyan-400">pip install</span> -r requirements.txt
+            <pre id="code-linux" class="font-mono text-xs sm:text-sm text-slate-200 leading-relaxed pr-16"><span class="text-slate-500"># Ubuntu / Debian / Mint / Raspberry Pi OS: add the signed qrussell repository once</span>
+<span class="text-cyan-400">sudo curl</span> -fsSL https://qrussell.github.io/qrussell-repo/deb/qrussell-repo.gpg -o /usr/share/keyrings/qrussell-repo.gpg
+<span class="text-cyan-400">echo</span> "deb [signed-by=/usr/share/keyrings/qrussell-repo.gpg] https://qrussell.github.io/qrussell-repo/deb ./" | <span class="text-cyan-400">sudo tee</span> /etc/apt/sources.list.d/qrussell.list
+<span class="text-emerald-400">sudo apt update</span> &amp;&amp; <span class="text-emerald-400">sudo apt install</span> wemo-ops
 
-<span class="text-slate-500"># Launch Desktop GUI or Always-On Headless Server (Port 5050)</span>
-<span class="text-emerald-400">python</span> wemo_ops_center.py
-<span class="text-amber-300">sudo systemctl enable --now wemo-ops-server</span></pre>
+<span class="text-slate-500"># Fedora 41+ / RHEL / Rocky / Alma (see the README for dnf 4)</span>
+<span class="text-cyan-400">sudo dnf config-manager</span> addrepo --from-repofile=https://qrussell.github.io/qrussell-repo/qrussell.repo
+<span class="text-emerald-400">sudo dnf install</span> wemo-ops
+
+<span class="text-slate-500"># Desktop app: "WemoOps" in your app menu. Always-on server + web UI on port 5050:</span>
+<span class="text-amber-300">systemctl status wemo-ops-server</span></pre>
           </div>
           <div class="flex justify-end">
             <a href="https://github.com/qrussell/wemo-ops-center/releases" target="_blank" rel="noopener noreferrer" class="text-xs font-mono text-emerald-400 hover:underline">Download ARM64 / x86_64 Linux Packages &rarr;</a>
@@ -888,18 +969,18 @@
         <!-- Windows Panel -->
         <div id="deployPanel-windows" class="deploy-panel hidden p-6 sm:p-8 space-y-5">
           <div>
-            <h3 class="text-lg font-bold text-white">Windows 10 / 11 Portable Executable &amp; Installer</h3>
-            <p class="text-xs sm:text-sm text-slate-400">Zero Python setup required. Download the standalone build from GitHub Releases and allow local private network firewall access for SSDP discovery.</p>
+            <h3 class="text-lg font-bold text-white">Windows 10 / 11 Installer</h3>
+            <p class="text-xs sm:text-sm text-slate-400">Zero Python setup required. Download <code class="font-mono text-cyan-300">WemoOps_Setup_v&lt;version&gt;.exe</code> from GitHub Releases. It installs to Program Files and adds a Windows Firewall rule so phones on your home (Private) network can open the mobile web app. SmartScreen warning on first launch: <em>More info &rarr; Run anyway</em>.</p>
           </div>
           <div class="relative rounded-2xl bg-[#050810] border border-slate-800 p-4 overflow-x-auto">
             <button onclick="copyCodeBlock('code-windows')" class="absolute top-3 right-3 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-emerald-500 hover:text-slate-950 text-xs font-mono text-slate-300 transition-colors">
               Copy
             </button>
-            <pre id="code-windows" class="font-mono text-xs sm:text-sm text-slate-200 leading-relaxed pr-16"><span class="text-slate-500"># PowerShell: Open the latest GitHub Release or run from source</span>
+            <pre id="code-windows" class="font-mono text-xs sm:text-sm text-slate-200 leading-relaxed pr-16"><span class="text-slate-500"># PowerShell: open the latest release and download WemoOps_Setup_v&lt;version&gt;.exe</span>
 <span class="text-cyan-400">Start-Process</span> <span class="text-emerald-400">"https://github.com/qrussell/wemo-ops-center/releases/latest"</span>
 
-<span class="text-slate-500"># Optional: Allow local SSDP &amp; UPnP discovery on Private networks</span>
-<span class="text-amber-300">New-NetFirewallRule</span> -DisplayName "Wemo Ops Center" -Direction Inbound -Protocol UDP -LocalPort 1900 -Action Allow</pre>
+<span class="text-slate-500"># Optional: check the download against SHA256SUMS.txt from the same release</span>
+<span class="text-amber-300">Get-FileHash</span> .\WemoOps_Setup_v*.exe -Algorithm SHA256</pre>
           </div>
           <div class="flex justify-end">
             <a href="https://github.com/qrussell/wemo-ops-center/releases" target="_blank" rel="noopener noreferrer"
@@ -913,15 +994,15 @@
         <div id="deployPanel-macos" class="deploy-panel hidden p-6 sm:p-8 space-y-5">
           <div>
             <h3 class="text-lg font-bold text-white">macOS Apple Silicon &amp; Intel App Bundle</h3>
-            <p class="text-xs sm:text-sm text-slate-400">Download the native <code class="font-mono text-cyan-300">.dmg</code> from GitHub Releases and grant Local Network access when prompted by macOS.</p>
+            <p class="text-xs sm:text-sm text-slate-400">Download the <code class="font-mono text-cyan-300">.dmg</code> for your Mac (macOS 15+ or macOS 26 Tahoe, Apple Silicon or Intel), run <em>Install_WemoOps.command</em> or drag <em>WemoOps</em> to Applications, and allow Local Network access when macOS asks.</p>
           </div>
           <div class="relative rounded-2xl bg-[#050810] border border-slate-800 p-4 overflow-x-auto">
             <button onclick="copyCodeBlock('code-macos')" class="absolute top-3 right-3 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-emerald-500 hover:text-slate-950 text-xs font-mono text-slate-300 transition-colors">
               Copy
             </button>
-            <pre id="code-macos" class="font-mono text-xs sm:text-sm text-slate-200 leading-relaxed pr-16"><span class="text-slate-500"># If macOS Gatekeeper warns on unsigned open-source builds:</span>
-<span class="text-cyan-400">xattr</span> -cr <span class="text-emerald-400">"/Applications/Wemo Ops Center.app"</span>
-<span class="text-cyan-400">open</span> <span class="text-emerald-400">"/Applications/Wemo Ops Center.app"</span></pre>
+            <pre id="code-macos" class="font-mono text-xs sm:text-sm text-slate-200 leading-relaxed pr-16"><span class="text-slate-500"># First launch of the unsigned app: right-click WemoOps → Open → Open, or:</span>
+<span class="text-cyan-400">xattr</span> -dr com.apple.quarantine <span class="text-emerald-400">"/Applications/WemoOps.app"</span>
+<span class="text-cyan-400">open</span> <span class="text-emerald-400">"/Applications/WemoOps.app"</span></pre>
           </div>
           <div class="flex justify-end">
             <a href="https://github.com/qrussell/wemo-ops-center/releases" target="_blank" rel="noopener noreferrer"
@@ -942,14 +1023,14 @@
               Copy
             </button>
             <pre id="code-mcp" class="font-mono text-xs sm:text-sm text-slate-200 leading-relaxed pr-16"><span class="text-slate-500"># Install from PyPI</span>
-<span class="text-cyan-400">pip install</span> <span class="text-emerald-400">wemo-ops-mcp</span>
+<span class="text-cyan-400">pip install</span> <span class="text-emerald-400">wemo-mcp-server</span>
 
 <span class="text-slate-500"># Add to claude_desktop_config.json / MCP client config:</span>
 {
   <span class="text-amber-300">"mcpServers"</span>: {
-    <span class="text-emerald-400">"wemo-ops"</span>: {
+    <span class="text-emerald-400">"wemo"</span>: {
       <span class="text-cyan-300">"command"</span>: <span class="text-white">"uvx"</span>,
-      <span class="text-cyan-300">"args"</span>: [<span class="text-white">"wemo-ops-mcp"</span>]
+      <span class="text-cyan-300">"args"</span>: [<span class="text-white">"wemo-mcp-server"</span>]
     }
   }
 }</pre>
@@ -1438,7 +1519,7 @@
         document.getElementById(`simPanel-${tab}`).classList.remove('hidden');
 
         const titles = {
-          desktop: 'wemo-ops-center v5.3.1 — Local LAN Console',
+          desktop: 'wemo-ops-center v5.4.0 — Local LAN Console',
           server: 'wemo-ops-server :5050 — Mobile Web UI & Solar Daemon',
           mcp: 'wemo-ops-mcp (PyPI) — AI Assistant MCP Bridge'
         };
