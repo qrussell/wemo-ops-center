@@ -212,9 +212,11 @@ async function syncClocksNow() {
   lbl.textContent = "Syncing...";
   try {
     const r = await API.post("sync_clocks", {});
-    lbl.textContent = r && r.status === "ok"
-      ? `Synced ${r.synced.length} device(s)` + (r.failed.length ? `, failed: ${r.failed.join(", ")}` : "")
-      : "Sync failed";
+    if (!r || r.status !== "ok") lbl.textContent = "Sync failed";
+    else if (!r.synced.length && !r.failed.length)
+      lbl.textContent = "No Wemo devices found. Make sure they are on this network, then press Scan.";
+    else
+      lbl.textContent = `Synced ${r.synced.length} device(s)` + (r.failed.length ? `, failed: ${r.failed.join(", ")}` : "");
   } catch (e) { lbl.textContent = "Sync failed"; }
 }
 

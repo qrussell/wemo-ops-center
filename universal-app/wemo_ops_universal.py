@@ -36,6 +36,7 @@ VERSION = "v5.4.0"
 SERVER_PORT = 5050
 HOOBS_PORT = 8581
 LOCAL_SERVER_URL = f"http://localhost:{SERVER_PORT}"
+NO_DEVICES_TEXT = "No Wemo devices found"
 # Where the desktop app finds the background service. Local by default; can be
 # pointed at a Wemo Ops Server on another machine (GitHub issue 22) through
 # Settings or the WEMO_OPS_SERVER_URL environment variable. See resolve_server_url().
@@ -843,7 +844,9 @@ class WemoOpsApp(ctk.CTk):
 
             log(f"Scan Complete ({len(new_map)} found)")
         except Exception as e: log(f"Error: {e}")
-        finally: self._scan_running = False
+        finally:
+            self._scan_running = False
+            self.after(0, self.update_maint_dropdown)  # "No Wemo devices found" if it found none
 
     def refresh_network(self):
         self.run_local_scan()
@@ -1349,7 +1352,9 @@ class WemoOpsApp(ctk.CTk):
         f = ctk.CTkFrame(self.content, fg_color="transparent"); self.frames["maint"] = f
         ctk.CTkLabel(f, text="Device Maintenance Tools", font=FONT_H1, text_color=COLOR_TEXT).pack(pady=20)
         sel = ctk.CTkFrame(f, fg_color=COLOR_FRAME); sel.pack(fill="x", padx=20, pady=10)
-        self.maint_dev_combo = ctk.CTkComboBox(sel, values=["Scanning..."], width=300); self.maint_dev_combo.pack(side="left", padx=10)
+        ctk.CTkLabel(sel, text="Device:", font=FONT_BODY, text_color=COLOR_TEXT).pack(side="left", padx=(10, 0), pady=8)
+        self.maint_dev_combo = ctk.CTkComboBox(sel, values=["Scanning..."], width=300); self.maint_dev_combo.pack(side="left", padx=10, pady=8)
+        ctk.CTkLabel(sel, text="Used by the buttons below", font=("Arial", 11), text_color=COLOR_SUBTEXT).pack(side="left")
         grid = ctk.CTkFrame(f, fg_color="transparent"); grid.pack(fill="both", expand=True, padx=20, pady=10)
         grid.columnconfigure(0, weight=1); grid.columnconfigure(1, weight=1); grid.columnconfigure(2, weight=1)
         
@@ -1375,19 +1380,35 @@ class WemoOpsApp(ctk.CTk):
                      "away mode stored on the device (e.g. from the Wemo app) run at the wrong time.",
                      text_color="gray", font=("Arial", 11)).pack(pady=5)
         btns = ctk.CTkFrame(c4, fg_color="transparent"); btns.pack(pady=(5, 5))
-        ctk.CTkButton(btns, text="Sync Clock", command=lambda: self.run_clock_sync(all_devices=False)).pack(side="left", padx=5)
-        ctk.CTkButton(btns, text="Sync All Devices", command=lambda: self.run_clock_sync(all_devices=True)).pack(side="left", padx=5)
+        ctk.CTkButton(btns, text="Sync Selected Device", width=170, command=lambda: self.run_clock_sync(all_devices=False)).pack(side="left", padx=5)
+        ctk.CTkButton(btns, text="Sync All Devices", width=170, command=lambda: self.run_clock_sync(all_devices=True)).pack(side="left", padx=5)
         self.clock_sync_lbl = ctk.CTkLabel(c4, text="", font=("Arial", 11), text_color=COLOR_SUBTEXT)
         self.clock_sync_lbl.pack(pady=(0, 10))
 
     def update_maint_dropdown(self):
         names = sorted(self.known_devices_map.keys())
-        if names: self.maint_dev_combo.configure(values=names); self.maint_dev_combo.set(names[0])
+        if names:
+            current = self.maint_dev_combo.get()
+            self.maint_dev_combo.configure(values=names)
+            self.maint_dev_combo.set(current if current in names else names[0])
+        else:
+            text = "Scanning..." if self._scan_running else NO_DEVICES_TEXT
+            self.maint_dev_combo.configure(values=[text]); self.maint_dev_combo.set(text)
+
+    def no_devices_message(self):
+        """Explain an empty device list instead of a bare 'Device not found'."""
+        if self._scan_running:
+            return messagebox.showinfo("Still Scanning", "Wemo Ops Center is still looking for Wemo devices. Try again when the scan finishes.")
+        messagebox.showwarning("No Wemo Devices Found",
+            "Wemo Ops Center couldn't find any Wemo devices on your network.\n\n"
+            "Make sure the devices are powered on and on the same network as this computer, "
+            "then press Scan on the Dashboard (add the devices' subnet there if they are on another one).")
             
     def run_reset_command(self, reset_code):
         name = self.maint_dev_combo.get()
         dev = self.known_devices_map.get(name)
-        if not dev: return messagebox.showerror("Error", "Device not found.")
+        if not self.known_devices_map: return self.no_devices_message()
+        if not dev: return messagebox.showerror("Device Not Found", f"'{name}' isn't in the list of discovered Wemo devices. Pick a device from the list.")
         if not messagebox.askyesno("Confirm Reset", f"Reset '{name}' (Code {reset_code})?"): return
         def task():
             try: dev.basicevent.ReSetup(Reset=reset_code); self.after(0, lambda: messagebox.showinfo("Success", "Command Sent"))
@@ -1396,13 +1417,13 @@ class WemoOpsApp(ctk.CTk):
 
     def run_clock_sync(self, all_devices=False):
         """GitHub issue 32: push this computer's time and time zone to the device(s)."""
+        if not self.known_devices_map: return self.no_devices_message()
         if all_devices:
             targets = dict(self.known_devices_map)
         else:
             name = self.maint_dev_combo.get(); dev = self.known_devices_map.get(name)
-            if not dev: return messagebox.showerror("Error", "Device not found.")
+            if not dev: return messagebox.showerror("Device Not Found", f"'{name}' isn't in the list of discovered Wemo devices. Pick a device from the list.")
             targets = {name: dev}
-        if not targets: return messagebox.showerror("Error", "No devices found yet.")
         self.clock_sync_lbl.configure(text="Syncing...")
         def task():
             ok, failed = [], []
@@ -1441,7 +1462,7 @@ class WemoOpsApp(ctk.CTk):
         ctk.CTkLabel(r6, text="Keep device clocks in sync (daily):", font=FONT_BODY, text_color=COLOR_TEXT).pack(side="left")
         self.clock_sync_var = ctk.BooleanVar(value=bool(self.settings.get("sync_device_clocks", False)))
         ctk.CTkSwitch(r6, text="", variable=self.clock_sync_var, command=self.change_clock_sync).pack(side="right")
-        ctk.CTkLabel(c, text="Background service sets each device's clock and time zone once a day. Device Maintenance has a manual Sync Clock.",
+        ctk.CTkLabel(c, text="Background service sets each device's clock and time zone once a day. Maintenance has Sync Selected Device and Sync All Devices.",
                      font=("Arial", 11), text_color=COLOR_SUBTEXT, wraplength=600, justify="left").pack(anchor="w", padx=20, pady=(0, 10))
 
         # --- Server location (GitHub issue 22) ---
