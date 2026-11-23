@@ -3,7 +3,7 @@ Welcome to Wemo Ops. We offer three ways to manage your smart home, depending on
 
 ![Wemo Ops Center Dashboard](assets/wemo-ops.png)
 
-![Version](https://img.shields.io/badge/version-v5.5.0-blue)
+![Version](https://img.shields.io/badge/version-v5.6.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Raspberry%20Pi-lightgrey)
 [![MCP](https://img.shields.io/badge/MCP-Server-blue)](https://modelcontextprotocol.io)
 [![AI Integration](https://img.shields.io/badge/AI-Integration-purple)](https://modelcontextprotocol.io)
@@ -17,9 +17,9 @@ Wemo Ops Center is a completely local, offline provisioning and automation suite
 * Belkin Wemo local control setup
 * Wemo troubleshooting and Wi-Fi provisioning
 
-> **New in v5.5.0:** device clock sync (fixes schedules stored on the plug running at the wrong time), a Windows build that no longer trips Microsoft Defender's machine-learning check, and a Homebridge installer that no longer hangs at "Starting Homebridge Service". See the [v5.5.0 release notes](release-notes/v5.5.0.md).
+> **New in v5.6.0:** experimental schedules stored on the plug itself ([#28](https://github.com/qrussell/wemo-ops-center/issues/28)). **Automation** now has two tabs, **Run by Wemo Ops** and **Stored on Device (experimental)**, and you can move a schedule between them. See the [v5.6.0 release notes](release-notes/v5.6.0.md).
 >
-> v5.4.0 added a remote server option for the desktop app, Insight power readings, a Program Files installer for Windows and 175%/200% UI scaling ([release notes](release-notes/v5.4.0.md)).
+> v5.5.0 added device clock sync, a Windows build that no longer trips Microsoft Defender's machine-learning check, and a Homebridge installer that no longer hangs ([release notes](release-notes/v5.5.0.md)). v5.4.0 added a remote server option for the desktop app, Insight power readings, a Program Files installer for Windows and 175%/200% UI scaling ([release notes](release-notes/v5.4.0.md)).
 
 ## 🚀 Choose Your Edition
 
@@ -31,7 +31,7 @@ Wemo Ops Center is a completely local, offline provisioning and automation suite
 | **OS Support** | Windows, macOS (15+, Apple Silicon & Intel), Linux (Fedora/RHEL/Rocky, Ubuntu/Debian, Raspberry Pi OS) | Linux server, Raspberry Pi, Docker | Python 3.10+ (Any OS) |
 | **Repository** | This repo | This repo | [apiarya/wemo-mcp-server](https://github.com/apiarya/wemo-mcp-server) |
 | **Installation** | [Releases page](../../releases) or [`apt`/`dnf` repository](#-installation-linux) | [`apt`/`dnf` repository](#-installation-linux) or [Docker](#-docker) | `pip install wemo-mcp-server` |
-| **Version** | v5.5.0 | v5.5.0 | v1.1.0 (Latest) |
+| **Version** | v5.6.0 | v5.6.0 | v1.1.0 (Latest) |
 | **Key Benefit** | **Zero Setup.** Just launch and click. | **Set & Forget.** Automation never stops. | **Universal Protocol.** Works with any MCP host. |
 
 > **Note:** The MCP Server has been moved to its own dedicated repository at [apiarya/wemo-mcp-server](https://github.com/apiarya/wemo-mcp-server) for better discoverability and to follow MCP ecosystem best practices.
@@ -45,11 +45,11 @@ No Python installation required.
 
    | System | File |
    |---|---|
-   | Windows 10/11 | `WemoOps_Setup_v5.5.0.exe` |
-   | macOS 15 (Sequoia) or newer, Apple Silicon (M1–M4) | `WemoOps_5.5.0-1_macos15-apple-silicon.dmg` |
-   | macOS 15 (Sequoia) or newer, Intel | `WemoOps_5.5.0-1_macos15-intel.dmg` |
-   | macOS 26 (Tahoe), Apple Silicon | `WemoOps_5.5.0-1_macos26-apple-silicon.dmg` |
-   | macOS 26 (Tahoe), Intel | `WemoOps_5.5.0-1_macos26-intel.dmg` |
+   | Windows 10/11 | `WemoOps_Setup_v5.6.0.exe` |
+   | macOS 15 (Sequoia) or newer, Apple Silicon (M1–M4) | `WemoOps_5.6.0-1_macos15-apple-silicon.dmg` |
+   | macOS 15 (Sequoia) or newer, Intel | `WemoOps_5.6.0-1_macos15-intel.dmg` |
+   | macOS 26 (Tahoe), Apple Silicon | `WemoOps_5.6.0-1_macos26-apple-silicon.dmg` |
+   | macOS 26 (Tahoe), Intel | `WemoOps_5.6.0-1_macos26-intel.dmg` |
    | Linux | Use the [package repository](#-installation-linux) (recommended), or download the `.deb` / `.rpm` |
 
 2. **Provisioner:** Follow the on-screen instructions to scan for and configure your Wemo devices.
@@ -100,11 +100,18 @@ _Screenshots use simulated devices._
     <td><img src="assets/screenshots/desktop-provisioner-dark.png" alt="Provisioner, dark mode" width="100%"></td>
   </tr>
   <tr>
-    <td colspan="2"><b>Automation:</b> Fixed-time and sunrise/sunset schedules, run by the background service.</td>
+    <td colspan="2"><b>Automation, Run by Wemo Ops:</b> Fixed-time and sunrise/sunset schedules, run by the background service or Wemo Ops Server.</td>
   </tr>
   <tr>
-    <td><img src="assets/screenshots/desktop-automation-light.png" alt="Automation, light mode" width="100%"></td>
-    <td><img src="assets/screenshots/desktop-automation-dark.png" alt="Automation, dark mode" width="100%"></td>
+    <td><img src="assets/screenshots/desktop-automation-light.png" alt="Automation, Run by Wemo Ops tab, light mode" width="100%"></td>
+    <td><img src="assets/screenshots/desktop-automation-dark.png" alt="Automation, Run by Wemo Ops tab, dark mode" width="100%"></td>
+  </tr>
+  <tr>
+    <td colspan="2"><b>Automation, Stored on Device (experimental):</b> Schedules saved on the plug itself, run by its own firmware.</td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/desktop-automation-device-light.png" alt="Automation, Stored on Device tab, light mode" width="100%"></td>
+    <td><img src="assets/screenshots/desktop-automation-device-dark.png" alt="Automation, Stored on Device tab, dark mode" width="100%"></td>
   </tr>
   <tr>
     <td colspan="2"><b>Maintenance:</b> Reset a device's data or Wi-Fi, factory reset it, or set its clock.</td>
@@ -178,10 +185,20 @@ Advanced tools to manage device health directly from the app:
 Choose the device in the **Device** list at the top of the page; all the buttons act on it. If no Wemo devices have been found yet, the app says so instead of acting.
 
 ### 4. ☀️ Solar Automation Scheduler
-* **Local Automation:** Runs on your computer as a background service.
+**Automation** has two tabs, one for each place a schedule can run. Each schedule is labelled with where it runs: **WEMO OPS** or **PLUG**.
+
+**Run by Wemo Ops** (recommended):
+* **Local Automation:** Runs on your computer as a background service, or on your Wemo Ops Server. That computer or server must stay on.
 * **Solar Engine:** Automatically detects your latitude/longitude to trigger lights at **Sunrise** or **Sunset**.
 * **Fixed Schedules:** Set standard time-based schedules (e.g., "Turn ON at 18:00").
 * **Pick the Days:** Each schedule runs on the days you tick, with an optional offset before or after sunrise/sunset.
+* **Push to Device:** Stores a fixed-time Turn ON or Turn OFF schedule on the plug itself.
+
+**Stored on Device (experimental)** ([#28](https://github.com/qrussell/wemo-ops-center/issues/28)):
+* **Schedules on the plug:** Pick a device to list the rules saved on it, including ones made in the old Wemo app. Add an ON time, an OFF time or both on the days you choose, turn a rule off or on, delete a Wemo Ops rule, or clear them all.
+* **Copy to Wemo Ops:** Has Wemo Ops run a plug's schedule instead (sunrise/sunset ones too). After copying or pushing, the app offers to turn off the original so a schedule doesn't run in both places.
+* **Safety first:** The plug's rules are backed up before every change (to `rules-backups` in the app data folder) and can be put back with **Restore Backup**. The app won't write if it can't read the plug's current rules, or if they changed since it read them, and it reads them back after saving. It syncs the plug's clock first.
+* **Experimental:** Plugs keep these schedules, but since Belkin's cloud shut down some firmware never runs them. On a Wemo Mini with firmware 2.00.11565 they did not switch the plug in our tests. Watch the plug the first time a schedule is due, and use **Copy to Wemo Ops** if it doesn't switch.
 
 ### 5. 📱 Mobile Web App
 * **Scan the QR Code:** Connect to the mobile web app with your phone or tablet and control your Wemo devices.
