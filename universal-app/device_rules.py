@@ -35,6 +35,7 @@ NO_DATE_START = "12201982"    # Wemo app's "no date range" values
 NO_DATE_END = "07301982"
 DAY_LETTERS = ["M", "T", "W", "Th", "F", "Sa", "Su"]  # app day index 0 = Monday
 DB_NAME_IN_ZIP = "temppluginRules.db"
+SUNRISE, SUNSET = -2, -3       # StartTime/EndTime codes for sun-based rules
 
 # Tables as the firmware and pywemo's rules_db.py define them.
 SCHEMA = [
@@ -64,7 +65,7 @@ EXPERIMENTAL_NOTE = (
     "Because they live on the plug, they don't need this computer or the "
     "Wemo Ops service. Since Belkin's cloud shut down, some firmware keeps these schedules but never runs "
     "them (a Wemo Mini on firmware 2.00.11565 didn't). Watch the plug the first time a schedule is due, and "
-    "use the Automation tab if it doesn't switch.")
+    "use Copy to Wemo Ops if it doesn't switch.")
 
 _locks = {}
 _locks_guard = threading.Lock()
@@ -147,29 +148,95 @@ def _close_db(con, path):
     return data
 
 
+def _when(secs, offset):
+    """A rule time as text: 'HH:MM', 'sunrise+30' or 'sunset-15' (offset in seconds), or None."""
+    if secs == SUNRISE or secs == SUNSET:
+        mins = int((offset or 0) // 60) if offset and offset != -1 else 0
+        base = "sunrise" if secs == SUNRISE else "sunset"
+        return base if not mins else f"{base}{mins:+d}"
+    return secs_to_hhmm(secs)
+
+
 def rules_from_db(db_bytes):
-    """List the rules in a DB as dicts: id, name, type, enabled, ours, on, off, days, devices."""
+    """List the rules in a DB as dicts: id, name, type, enabled, ours, on, off, days, devices.
+    on/off are 'HH:MM', 'sunrise+N' / 'sunset-N' (minutes) or None."""
     con, path = _open_db(db_bytes)
     try:
         out = []
         for rid, name, rtype, state in con.execute("SELECT RuleID, Name, Type, State FROM RULES ORDER BY RuleID"):
-            rows = con.execute("SELECT DeviceID, DayID, StartTime, EndTime, StartAction, EndAction "
-                               "FROM RULEDEVICES WHERE RuleID=?", (rid,)).fetchall()
+            rows = con.execute("SELECT DeviceID, DayID, StartTime, EndTime, StartAction, EndAction, "
+                               "OnModeOffset, OffModeOffset FROM RULEDEVICES WHERE RuleID=?", (rid,)).fetchall()
             days = sorted({dayid_to_day_index(r[1]) for r in rows if r[1] is not None and 1 <= int(r[1]) <= 7})
             first = rows[0] if rows else None
             on = off = None
             if first:
-                start, end, sa, ea = first[2], first[3], first[4], first[5]
-                if sa == 1: on = secs_to_hhmm(start)
-                elif sa == 0: off = secs_to_hhmm(start)
-                if ea == 0: off = secs_to_hhmm(end)
-                elif ea == 1: on = secs_to_hhmm(end)
+                start, end, sa, ea, on_off, off_off = first[2], first[3], first[4], first[5], first[6], first[7]
+                if sa == 1: on = _when(start, on_off)
+                elif sa == 0: off = _when(start, on_off)
+                if ea == 0: off = _when(end, off_off)
+                elif ea == 1: on = _when(end, off_off)
             out.append({"id": rid, "name": str(name), "type": str(rtype), "enabled": str(state) == "1",
                         "ours": str(name).startswith(WOC_PREFIX), "on": on, "off": off, "days": days,
                         "devices": sorted({r[0] for r in rows if r[0]})})
         return out
     finally:
         _close_db(con, path)
+
+
+def _server_time(when):
+    """'HH:MM' / 'sunset-15' -> (type, value, offset_dir) for a Wemo Ops schedule job."""
+    if when.startswith("sunrise") or when.startswith("sunset"):
+        base = "Sunrise" if when.startswith("sunrise") else "Sunset"
+        rest = when[len(base):]
+        mins = int(rest) if rest else 0
+        return base, str(abs(mins)), (-1 if mins < 0 else 1)
+    return "Time (Fixed)", when, 1
+
+
+def rule_to_jobs(rule, device_label):
+    """Wemo Ops schedule jobs that do what a plug rule does. Returns (jobs, problem):
+    problem is a reason it can't be copied, or None."""
+    if rule["type"] not in ("Time Interval", "Simple Switch"):
+        return [], f"'{rule['type']}' rules (away mode, countdown, sensors...) can't be copied to Wemo Ops."
+    if not rule["days"]: return [], "This rule has no days set."
+    if not rule["on"] and not rule["off"]: return [], "This rule has no ON or OFF time."
+    jobs, base_id = [], int(time.time() * 1000)  # unique even for several copies per second
+    for n, (action, when) in enumerate((("Turn ON", rule["on"]), ("Turn OFF", rule["off"]))):
+        if not when: continue
+        stype, value, odir = _server_time(when)
+        jobs.append({"id": base_id + n, "device": device_label, "action": action, "type": stype, "value": value,
+                     "offset_dir": odir, "days": list(rule["days"]), "last_run": ""})
+    return jobs, None
+
+
+def job_to_rule_args(job):
+    """(on_time, off_time, days, problem) to push a Wemo Ops schedule job to a plug."""
+    if job.get("type") != "Time (Fixed)":
+        return None, None, None, "Only fixed-time schedules can be pushed to a device (not sunrise or sunset)."
+    if job.get("action") not in ("Turn ON", "Turn OFF"):
+        return None, None, None, "Only Turn ON and Turn OFF schedules can be pushed to a device (not Toggle)."
+    try: parse_hhmm(job.get("value"))
+    except Exception: return None, None, None, f"'{job.get('value')}' isn't a valid HH:MM time."
+    if job["action"] == "Turn ON": return job["value"], "", job.get("days") or [], None
+    return "", job["value"], job.get("days") or [], None
+
+
+def set_enabled(dev, rule_id, enabled, backup_dir):
+    """Turn one rule on the plug on or off (any rule; the plug's rules are backed up first)."""
+    with _lock_for(dev):
+        state = fetch(dev)
+        existing = rules_from_db(state["db"]) if state["db"] else []
+        if not any(str(r["id"]) == str(rule_id) for r in existing):
+            raise RulesError("That schedule is no longer on the plug. Refresh the list.")
+        path = backup(dev, state, backup_dir)
+        con, tmp = _open_db(state["db"])
+        con.execute("UPDATE RULES SET State=? WHERE RuleID=?", ("1" if enabled else "0", rule_id))
+        new_db = _close_db(con, tmp)
+        after = _store(dev, state, new_db, state["inner"], [r["name"] for r in existing])
+        got = next((r for r in rules_from_db(after["db"]) if str(r["id"]) == str(rule_id)), None) if after["db"] else None
+        if not got or got["enabled"] != bool(enabled):
+            raise RulesError("The plug answered, but the schedule's on/off state didn't change. Refresh to check.")
+        return path
 
 
 def describe_rule(r):
@@ -179,8 +246,8 @@ def describe_rule(r):
     if r["off"]: parts.append(f"off {r['off']}")
     what = ", ".join(parts) if parts else r["type"]
     name = r["name"][len(WOC_PREFIX):] if r["ours"] else r["name"]
-    src = "Wemo Ops" if r["ours"] else "other app"
-    state = "" if r["enabled"] else " (disabled)"
+    src = "made by Wemo Ops" if r["ours"] else "made by another app"
+    state = "" if r["enabled"] else "  [OFF]"
     return f"[{days}] {what}  {name}  ({src}){state}"
 
 
