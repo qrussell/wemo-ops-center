@@ -18,8 +18,9 @@ import webbrowser
 import re
 import tempfile
 import platform
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 import pyperclip
+import device_rules
 
 # --- QR Code & Image Support (CRASH FIX) ---
 HAS_QR = False
@@ -32,7 +33,7 @@ except Exception as e:
     HAS_QR = False
 
 # --- CONFIGURATION ---
-VERSION = "v5.5.0"
+VERSION = "v5.6.0"
 SERVER_PORT = 5050
 HOOBS_PORT = 8581
 LOCAL_SERVER_URL = f"http://localhost:{SERVER_PORT}"
@@ -61,6 +62,10 @@ if not os.path.exists(APP_DATA_DIR):
 PROFILE_FILE = os.path.join(APP_DATA_DIR, "wifi_profiles.json")
 SCHEDULE_FILE = os.path.join(APP_DATA_DIR, "schedules.json")
 SETTINGS_FILE = os.path.join(APP_DATA_DIR, "settings.json")
+SCHED_TAB_SERVER = "Run by Wemo Ops"
+SCHED_TAB_DEVICE = "Stored on Device (experimental)"
+# Backups of rules stored on devices, saved before every change (GitHub issue 28)
+RULES_BACKUP_DIR = os.path.join(APP_DATA_DIR, "rules-backups")
 
 # --- SERVICE & INSTALLER DETECTION ---
 BASE_DIR = os.path.dirname(os.path.abspath(sys.argv[0]))
@@ -1269,6 +1274,14 @@ class WemoOpsApp(ctk.CTk):
         head = ctk.CTkFrame(frame, fg_color="transparent"); head.pack(fill="x", pady=20)
         ctk.CTkLabel(head, text="Automation Scheduler", font=FONT_H1, text_color=COLOR_TEXT).pack(side="left")
         self.sched_mode_lbl = ctk.CTkLabel(head, text="MODE: CHECKING...", font=("Arial", 12, "bold"), text_color="gray"); self.sched_mode_lbl.pack(side="right", padx=10)
+        # Two kinds of schedule, kept apart (GitHub issue 28): ones the Wemo Ops service runs,
+        # and ones stored on the plug and run by its own firmware.
+        tabs = ctk.CTkTabview(frame, anchor="w"); tabs.pack(fill="both", expand=True)
+        self.sched_tabs = tabs
+        frame = tabs.add(SCHED_TAB_SERVER); dev_tab = tabs.add(SCHED_TAB_DEVICE)
+        ctk.CTkLabel(frame, text="Run by the Wemo Ops service on this computer or your Wemo Ops Server, so it must stay on. "
+                     "Reliable on every Wemo device.",
+                     text_color=COLOR_SUBTEXT, font=("Arial", 12), wraplength=820, justify="left").pack(anchor="w", pady=(0, 10))
         loc_frame = ctk.CTkFrame(frame, fg_color=COLOR_FRAME); loc_frame.pack(fill="x", pady=(0, 10))
         ctk.CTkLabel(loc_frame, text="Solar Location:", font=FONT_H2, text_color=COLOR_TEXT).pack(side="left", padx=10)
         self.loc_lbl = ctk.CTkLabel(loc_frame, text="Detecting...", text_color="orange"); self.loc_lbl.pack(side="left")
@@ -1287,7 +1300,8 @@ class WemoOpsApp(ctk.CTk):
             v = ctk.BooleanVar(value=True); self.day_vars.append(v); ctk.CTkCheckBox(day_frame, text=d, variable=v, width=40, text_color=COLOR_TEXT).pack(side="left", padx=2)
         ctk.CTkButton(r2, text="Create Job", width=100, fg_color=COLOR_SUCCESS, command=self.add_job).pack(side="right", padx=10)
         ctk.CTkLabel(frame, text="Active Schedules", font=FONT_H2, text_color=COLOR_TEXT).pack(anchor="w", pady=(10,0))
-        self.job_list_frame = ctk.CTkScrollableFrame(frame, height=350, label_text="Scheduled Jobs"); self.job_list_frame.pack(fill="both", expand=True, pady=5)
+        self.job_list_frame = ctk.CTkScrollableFrame(frame, height=250, label_text="Scheduled Jobs"); self.job_list_frame.pack(fill="both", expand=True, pady=5)
+        self.create_device_rules_ui(dev_tab)
         self.render_jobs(); self.update_solar_data()
 
     def on_sched_type_change(self, choice):
@@ -1327,8 +1341,12 @@ class WemoOpsApp(ctk.CTk):
             row = ctk.CTkFrame(self.job_list_frame, fg_color=COLOR_FRAME); row.pack(fill="x", pady=2)
             d_str = "".join([days_map[i] for i in job['days']])
             if len(job['days']) == 7: d_str = "Every Day"
+            ctk.CTkLabel(row, text="WEMO OPS", width=70, font=("Arial", 11, "bold"), fg_color=COLOR_ACCENT, text_color="#ffffff",
+                         corner_radius=4).pack(side="left", padx=(8, 0), pady=5)
             ctk.CTkLabel(row, text=f"[{d_str}] {job['type']} -> {job['action']} '{job['device']}'", font=("Consolas", 12), text_color=COLOR_TEXT).pack(side="left", padx=10, pady=5)
             ctk.CTkButton(row, text="Del", width=40, fg_color=COLOR_DANGER, command=lambda j=job: self.delete_job(j["id"])).pack(side="right", padx=5)
+            ctk.CTkButton(row, text="Push to Device", width=110, fg_color=COLOR_BTN_SECONDARY, text_color=COLOR_BTN_TEXT,
+                          command=lambda j=job: self.push_job_to_device(j)).pack(side="right", padx=5)
 
     def delete_job(self, jid):
         self.api.delete_schedule(jid); self.schedules = [j for j in self.schedules if j["id"] != jid]; self.save_json(SCHEDULE_FILE, self.schedules); self.render_jobs()
@@ -1385,15 +1403,212 @@ class WemoOpsApp(ctk.CTk):
         self.clock_sync_lbl = ctk.CTkLabel(c4, text="", font=("Arial", 11), text_color=COLOR_SUBTEXT)
         self.clock_sync_lbl.pack(pady=(0, 10))
 
+    # --- Schedules stored on the device (GitHub issue 28) ---
+    def create_device_rules_ui(self, f):
+        ctk.CTkLabel(f, text="Saved on the plug and run by the plug's own firmware, not by Wemo Ops. "
+                     "Use Copy to Wemo Ops to have the service run one instead.",
+                     text_color=COLOR_SUBTEXT, font=("Arial", 12), wraplength=820, justify="left").pack(anchor="w", pady=(0, 5))
+        ctk.CTkLabel(f, text=device_rules.EXPERIMENTAL_NOTE, text_color=COLOR_UPDATE, font=("Arial", 12),
+                     wraplength=820, justify="left").pack(anchor="w", pady=(0, 5))
+        sel = ctk.CTkFrame(f, fg_color=COLOR_FRAME); sel.pack(fill="x", pady=5)
+        ctk.CTkLabel(sel, text="Device:", font=FONT_BODY, text_color=COLOR_TEXT).pack(side="left", padx=(10, 0), pady=8)
+        self.rules_dev_combo = ctk.CTkComboBox(sel, values=["Scanning..."], width=260, command=lambda _: self.refresh_device_rules())
+        self.rules_dev_combo.pack(side="left", padx=10, pady=8)
+        ctk.CTkButton(sel, text="Refresh", width=90, fg_color=COLOR_BTN_SECONDARY, text_color=COLOR_BTN_TEXT,
+                      command=self.refresh_device_rules).pack(side="left", padx=5)
+        ctk.CTkButton(sel, text="Clear All", width=90, fg_color=COLOR_DANGER,
+                      command=self.clear_device_rules).pack(side="right", padx=5)
+        ctk.CTkButton(sel, text="Restore Backup...", width=130, fg_color=COLOR_BTN_SECONDARY, text_color=COLOR_BTN_TEXT,
+                      command=self.restore_device_rules).pack(side="right", padx=5)
+
+        add = ctk.CTkFrame(f); add.pack(fill="x", pady=5)
+        r1 = ctk.CTkFrame(add, fg_color="transparent"); r1.pack(fill="x", padx=10, pady=5)
+        ctk.CTkLabel(r1, text="Name:", text_color=COLOR_TEXT).pack(side="left", padx=5)
+        self.rule_name_entry = ctk.CTkEntry(r1, width=160, placeholder_text="Porch light"); self.rule_name_entry.pack(side="left", padx=5)
+        ctk.CTkLabel(r1, text="ON at:", text_color=COLOR_TEXT).pack(side="left", padx=(15, 5))
+        self.rule_on_entry = ctk.CTkEntry(r1, width=70, placeholder_text="18:00"); self.rule_on_entry.pack(side="left")
+        ctk.CTkLabel(r1, text="OFF at:", text_color=COLOR_TEXT).pack(side="left", padx=(15, 5))
+        self.rule_off_entry = ctk.CTkEntry(r1, width=70, placeholder_text="23:00"); self.rule_off_entry.pack(side="left")
+        ctk.CTkLabel(r1, text="(24-hour, leave one empty for ON only or OFF only)", text_color=COLOR_SUBTEXT,
+                     font=("Arial", 11)).pack(side="left", padx=10)
+        r2 = ctk.CTkFrame(add, fg_color="transparent"); r2.pack(fill="x", padx=10, pady=5)
+        self.rule_day_vars = []
+        for d in device_rules.DAY_LETTERS:
+            v = ctk.BooleanVar(value=True); self.rule_day_vars.append(v)
+            ctk.CTkCheckBox(r2, text=d, variable=v, width=40, text_color=COLOR_TEXT).pack(side="left", padx=2)
+        ctk.CTkButton(r2, text="Save to Device", width=130, fg_color=COLOR_SUCCESS,
+                      command=self.add_device_rule).pack(side="right", padx=10)
+
+        self.rules_status_lbl = ctk.CTkLabel(f, text="Pick a device and press Refresh.", text_color=COLOR_SUBTEXT, font=("Arial", 11))
+        self.rules_status_lbl.pack(anchor="w")
+        self.rules_list_frame = ctk.CTkScrollableFrame(f, height=200, label_text="Schedules stored on this device")
+        self.rules_list_frame.pack(fill="both", expand=True, pady=5)
+
+    def _rules_target(self):
+        """(label, device) for the selected device, or None after telling the user why."""
+        if not self.known_devices_map: self.no_devices_message(); return None
+        name = self.rules_dev_combo.get(); dev = self.known_devices_map.get(name)
+        if not dev:
+            messagebox.showerror("Device Not Found", f"'{name}' isn't in the list of discovered Wemo devices. Pick a device from the list.")
+            return None
+        if not device_rules.supports_rules(dev):
+            messagebox.showinfo("Not Supported", f"'{name}' doesn't support schedules stored on the device "
+                                "(newer Dimmer V2 firmware, for example). Use the Automation tab instead.")
+            return None
+        return name, dev
+
+    def _rules_job(self, busy_text, work, done_text):
+        """Run a rules operation in a thread, then refresh the list. work() returns a backup path or None."""
+        target = self._rules_target()
+        if not target: return
+        name, dev = target
+        self.rules_status_lbl.configure(text=busy_text, text_color=COLOR_SUBTEXT)
+        def task():
+            try:
+                path = work(dev)
+                msg = done_text + (f" Backup: {path}" if path else "")
+                self.after(0, lambda: self.rules_status_lbl.configure(text=msg, text_color=COLOR_SUCCESS))
+                self._load_device_rules(dev, keep_status=True)
+            except Exception as e:
+                err = str(e)
+                self.after(0, lambda: self.rules_status_lbl.configure(text=err, text_color=COLOR_DANGER))
+                self.after(0, lambda: messagebox.showerror("Device Schedules", err))
+        threading.Thread(target=task, daemon=True).start()
+
+    def refresh_device_rules(self):
+        target = self._rules_target()
+        if not target: return
+        self.rules_status_lbl.configure(text="Reading rules from the device...", text_color=COLOR_SUBTEXT)
+        threading.Thread(target=self._load_device_rules, args=(target[1],), daemon=True).start()
+
+    def _load_device_rules(self, dev, keep_status=False):
+        try:
+            state, rules = device_rules.list_rules(dev)
+        except Exception as e:
+            err = str(e); self.after(0, lambda: self.rules_status_lbl.configure(text=err, text_color=COLOR_DANGER)); return
+        def show():
+            for w in self.rules_list_frame.winfo_children(): w.destroy()
+            if not keep_status:
+                self.rules_status_lbl.configure(text=f"{len(rules)} rule(s) on {dev.name} (rules version {state['version']}).",
+                                                text_color=COLOR_SUBTEXT)
+            if not rules:
+                ctk.CTkLabel(self.rules_list_frame, text="No schedules stored on this device.", text_color="gray").pack(pady=20); return
+            for r in rules:
+                row = ctk.CTkFrame(self.rules_list_frame, fg_color=COLOR_FRAME); row.pack(fill="x", pady=2)
+                ctk.CTkLabel(row, text="PLUG", width=50, font=("Arial", 11, "bold"), fg_color=COLOR_UPDATE, text_color="#ffffff",
+                             corner_radius=4).pack(side="left", padx=(8, 0), pady=5)
+                ctk.CTkLabel(row, text=device_rules.describe_rule(r), font=("Consolas", 12), text_color=COLOR_TEXT).pack(side="left", padx=10, pady=5)
+                if r["ours"]:
+                    ctk.CTkButton(row, text="Del", width=40, fg_color=COLOR_DANGER,
+                                  command=lambda rid=r["id"]: self.delete_device_rule(rid)).pack(side="right", padx=5)
+                ctk.CTkButton(row, text="Turn Off" if r["enabled"] else "Turn On", width=70,
+                              fg_color=COLOR_BTN_SECONDARY, text_color=COLOR_BTN_TEXT,
+                              command=lambda rr=r: self.toggle_device_rule(rr)).pack(side="right", padx=5)
+                ctk.CTkButton(row, text="Copy to Wemo Ops", width=130, fg_color=COLOR_ACCENT,
+                              command=lambda rr=r: self.copy_rule_to_server(rr)).pack(side="right", padx=5)
+        self.after(0, show)
+
+    def add_device_rule(self):
+        on, off = self.rule_on_entry.get(), self.rule_off_entry.get()
+        days = [i for i, v in enumerate(self.rule_day_vars) if v.get()]
+        try:
+            device_rules.parse_hhmm(on); device_rules.parse_hhmm(off)
+        except ValueError:
+            return messagebox.showwarning("Device Schedules", "Enter times as HH:MM in 24-hour time, for example 18:30.")
+        name = self.rule_name_entry.get()
+        self._rules_job("Saving to the device...",
+                        lambda dev: device_rules.add_schedule(dev, name, on, off, days, RULES_BACKUP_DIR, timesync_args),
+                        "Saved to the device and read back OK. Check that the plug switches the first time.")
+
+    def delete_device_rule(self, rule_id):
+        if not messagebox.askyesno("Delete Schedule", "Delete this schedule from the device? A backup is saved first."): return
+        self._rules_job("Deleting from the device...",
+                        lambda dev: device_rules.delete_schedule(dev, rule_id, RULES_BACKUP_DIR), "Deleted.")
+
+    def clear_device_rules(self):
+        name = self.rules_dev_combo.get()
+        if not messagebox.askyesno("Clear All Device Schedules",
+                                   f"Remove every schedule stored on '{name}', including ones made in the Wemo app? "
+                                   "A backup is saved first, and you can put it back with Restore Backup."): return
+        self._rules_job("Clearing the device's rules...",
+                        lambda dev: device_rules.clear_all(dev, RULES_BACKUP_DIR), "All rules cleared.")
+
+    def restore_device_rules(self):
+        os.makedirs(RULES_BACKUP_DIR, exist_ok=True)
+        path = filedialog.askopenfilename(title="Choose a rules backup", initialdir=RULES_BACKUP_DIR,
+                                          filetypes=[("Wemo rules backup", "*.zip")])
+        if not path: return
+        name = self.rules_dev_combo.get()
+        if not messagebox.askyesno("Restore Backup", f"Replace the schedules on '{name}' with\n{os.path.basename(path)}?\n"
+                                   "The device's current rules are backed up first."): return
+        self._rules_job("Restoring the backup...",
+                        lambda dev: device_rules.restore(dev, path, RULES_BACKUP_DIR), "Backup restored.")
+
+    def toggle_device_rule(self, rule):
+        enable = not rule["enabled"]
+        self._rules_job("Turning the schedule on..." if enable else "Turning the schedule off...",
+                        lambda dev: device_rules.set_enabled(dev, rule["id"], enable, RULES_BACKUP_DIR),
+                        "Schedule turned on." if enable else "Schedule turned off on the plug.")
+
+    def copy_rule_to_server(self, rule):
+        """Make Wemo Ops run a plug's schedule (for firmware that no longer runs its own)."""
+        label = self.rules_dev_combo.get()
+        jobs, problem = device_rules.rule_to_jobs(rule, label)
+        if problem: return messagebox.showinfo("Copy to Wemo Ops", problem)
+        lines = "\n".join(f"  {j['action']} at {j['value'] if j['type'] == 'Time (Fixed)' else j['type'] + (' ' + ('+' if j['offset_dir'] > 0 else '-') + j['value'] + ' min' if j['value'] != '0' else '')}" for j in jobs)
+        if not messagebox.askyesno("Copy to Wemo Ops",
+                                   f"Add to the Wemo Ops scheduler for '{label}':\n{lines}\n\n"
+                                   "Wemo Ops runs these only while its service or server is on."): return
+        if os.path.exists(SCHEDULE_FILE): self.schedules = self.load_json(SCHEDULE_FILE, list)
+        self.schedules.extend(jobs); self.save_json(SCHEDULE_FILE, self.schedules); self.render_jobs()
+        if rule["enabled"] and messagebox.askyesno("Copy to Wemo Ops",
+                "Copied. Turn off the plug's own copy so it can't run twice?\n"
+                "(Choose No to keep both. An ON or OFF at the same time in both places is harmless.)"):
+            self.toggle_device_rule(rule)
+        else:
+            self.rules_status_lbl.configure(text="Copied to Wemo Ops.", text_color=COLOR_SUCCESS)
+
+    def push_job_to_device(self, job):
+        """Store a Wemo Ops schedule on the plug itself (experimental)."""
+        on, off, days, problem = device_rules.job_to_rule_args(job)
+        if problem: return messagebox.showinfo("Push to Device", problem)
+        dev = self.known_devices_map.get(job["device"])
+        if not dev: return messagebox.showerror("Push to Device", f"'{job['device']}' isn't in the list of discovered Wemo devices.")
+        if not device_rules.supports_rules(dev):
+            return messagebox.showinfo("Push to Device", f"'{job['device']}' doesn't support schedules stored on the device.")
+        if not messagebox.askyesno("Push to Device",
+                f"Store '{job['action']} at {job['value']}' on '{job['device']}' itself?\n\n{device_rules.EXPERIMENTAL_NOTE}"): return
+        remove = messagebox.askyesno("Push to Device",
+                "Also remove it from Wemo Ops once it's on the device?\n"
+                "Choose No to keep both (recommended until you've seen the plug run it).")
+        name = f"{job['action'].replace('Turn ', '')} {job['value']}"
+        def task():
+            try:
+                path = device_rules.add_schedule(dev, name, on, off, days, RULES_BACKUP_DIR, timesync_args)
+            except Exception as e:
+                err = str(e); self.after(0, lambda: messagebox.showerror("Push to Device", err)); return
+            def done():
+                if remove: self.delete_job(job["id"])
+                self.rules_dev_combo.set(job["device"]); self.sched_tabs.set(SCHED_TAB_DEVICE)
+                self.rules_status_lbl.configure(text="Stored on the device and read back OK." + (f" Backup: {path}" if path else ""),
+                                                text_color=COLOR_SUCCESS)
+                self.refresh_device_rules()
+            self.after(0, done)
+        threading.Thread(target=task, daemon=True).start()
+
     def update_maint_dropdown(self):
         names = sorted(self.known_devices_map.keys())
         if names:
             current = self.maint_dev_combo.get()
             self.maint_dev_combo.configure(values=names)
             self.maint_dev_combo.set(current if current in names else names[0])
+            current = self.rules_dev_combo.get()
+            self.rules_dev_combo.configure(values=names)
+            self.rules_dev_combo.set(current if current in names else names[0])
         else:
             text = "Scanning..." if self._scan_running else NO_DEVICES_TEXT
             self.maint_dev_combo.configure(values=[text]); self.maint_dev_combo.set(text)
+            self.rules_dev_combo.configure(values=[text]); self.rules_dev_combo.set(text)
 
     def no_devices_message(self):
         """Explain an empty device list instead of a bare 'Device not found'."""
