@@ -33,7 +33,7 @@ except Exception as e:
     HAS_QR = False
 
 # --- CONFIGURATION ---
-VERSION = "v5.5.0"
+VERSION = "v5.6.0"
 SERVER_PORT = 5050
 HOOBS_PORT = 8581
 LOCAL_SERVER_URL = f"http://localhost:{SERVER_PORT}"
