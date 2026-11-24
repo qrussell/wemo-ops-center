@@ -393,5 +393,11 @@ See the **[Wemo MCP Server Documentation](https://github.com/apiarya/wemo-mcp-se
 
 * All applications can run on the same network and control the same devices simultaneously without conflict.
 
+## 🔒 Security
+Wemo Ops Center is designed for a trusted home or office network: the background service on port 5050 has no login, so never expose it to the internet. To report a vulnerability privately, see [SECURITY.md](SECURITY.md).
+
+## 🤝 Contributing
+Issues and pull requests are welcome on GitHub. This repository is a mirror, so accepted changes are carried over to the primary repository by the maintainer. See [CONTRIBUTING.md](CONTRIBUTING.md) (and [AGENTS.md](AGENTS.md) for AI coding agents).
+
 ## 🛠️ For Maintainers
 Releases are built automatically by GitHub Actions. See [RELEASING.md](RELEASING.md).
