@@ -534,7 +534,10 @@ def api_brightness(name):
                 except: pass
             threading.Thread(target=dim_task).start()
             return jsonify({"status": "ok"})
-        except Exception as e: return jsonify({"status": "error", "error": str(e)}), 400
+        except Exception as e:
+            # Don't send Python's error text back to the browser (CodeQL py/stack-trace-exposure)
+            logger.warning(f"Bad brightness request: {type(e).__name__}")
+            return jsonify({"status": "error", "error": "level must be a number from 0 to 100"}), 400
     return jsonify({"status": "not found"}), 404
 
 @app.route('/api/settings', methods=['GET', 'POST'])

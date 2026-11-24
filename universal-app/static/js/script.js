@@ -35,6 +35,12 @@ const API = {
   del: async (ep) => (await fetch("/api/" + ep, { method: "DELETE" })).json(),
 };
 
+// Device names and schedule fields come from the network: escape them before
+// they go into HTML so a device renamed to HTML can't run script here.
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+
 let cachedDevices = [];
 let cachedSchedules = [];
 let currentSettings = { subnets: [] };
@@ -67,17 +73,19 @@ async function updateDashboard() {
           let div = document.createElement("div");
           div.className = "card";
           div.id = "card-" + d.name.replace(/\s+/g, "-");
+          const key = escapeHtml(d.name.replace(/\s+/g, "-"));
+          const name = escapeHtml(d.name);
           
           let dimmerControls = "";
           if (d.type === "dimmer") {
               dimmerControls = `
                 <div style="margin-top:15px; display:flex; align-items:center; gap:10px;">
                     <span style="font-size:0.8rem;">💡</span>
-                    <input type="range" min="0" max="100" value="${d.state}" 
-                           class="slider"
-                           onchange="setBrightness('${d.name}', this.value)"
-                           oninput="document.getElementById('lbl-${d.name.replace(/\s+/g, "-")}').innerText = this.value + '%'">
-                    <span id="lbl-${d.name.replace(/\s+/g, "-")}" style="font-size:0.8rem; width:35px; text-align:right;">${d.state}%</span>
+                    <input type="range" min="0" max="100" value="${Number(d.state)}" 
+                           class="slider" data-name="${name}"
+                           onchange="setBrightness(this.dataset.name, this.value)"
+                           oninput="this.nextElementSibling.innerText = this.value + '%'">
+                    <span id="lbl-${key}" style="font-size:0.8rem; width:35px; text-align:right;">${Number(d.state)}%</span>
                 </div>
               `;
           }
@@ -85,11 +93,11 @@ async function updateDashboard() {
           div.innerHTML = `
                 <div class="flex">
                     <div>
-                        <div style="font-weight:bold; font-size:1.1rem;">${d.name}</div>
-                        <div style="font-size:0.8rem; color:var(--subtext);">${d.ip}</div>
-                        ${d.power_w != null ? `<div id="pw-${d.name.replace(/\s+/g, "-")}" style="font-size:0.85rem; margin-top:4px;">${powerText(d)}</div>` : ""}
+                        <div style="font-weight:bold; font-size:1.1rem;">${name}</div>
+                        <div style="font-size:0.8rem; color:var(--subtext);">${escapeHtml(d.ip)}</div>
+                        ${d.power_w != null ? `<div id="pw-${key}" style="font-size:0.85rem; margin-top:4px;">${escapeHtml(powerText(d))}</div>` : ""}
                     </div>
-                    <button id="btn-${d.name.replace(/\s+/g, "-")}" class="btn btn-toggle ${d.state > 0 ? "on" : ""}" onclick="toggle('${d.name}')">
+                    <button id="btn-${key}" class="btn btn-toggle ${d.state > 0 ? "on" : ""}" data-name="${name}" onclick="toggle(this.dataset.name)">
                         ${d.state > 0 ? "ON" : "OFF"}
                     </button>
                 </div>
@@ -160,10 +168,10 @@ async function updateSchedules() {
       div.className = "card flex";
       div.innerHTML = `
                         <div>
-                            <div style="font-weight:bold; color:var(--accent);">${s.action} ${s.device}</div>
-                            <div style="font-size:0.9rem; color:var(--subtext);">${s.type} ${s.value}</div>
+                            <div style="font-weight:bold; color:var(--accent);">${escapeHtml(s.action)} ${escapeHtml(s.device)}</div>
+                            <div style="font-size:0.9rem; color:var(--subtext);">${escapeHtml(s.type)} ${escapeHtml(s.value)}</div>
                         </div>
-                        <button class="btn btn-danger" style="padding:8px 12px;" onclick="delSched(${s.id})">🗑️</button>`;
+                        <button class="btn btn-danger" style="padding:8px 12px;" data-id="${escapeHtml(s.id)}" onclick="delSched(this.dataset.id)">🗑️</button>`;
       list.appendChild(div);
     });
     cachedSchedules = data;
@@ -184,7 +192,7 @@ async function addSchedule() {
 
 async function delSched(id) {
   if (confirm("Delete this rule?")) {
-    await API.del("schedules?id=" + id);
+    await API.del("schedules?id=" + encodeURIComponent(id));
     updateSchedules();
   }
 }

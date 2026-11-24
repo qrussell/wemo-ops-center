@@ -1335,7 +1335,8 @@
       };
       const toast = document.createElement('div');
       toast.className = `toast-enter px-4 py-3 rounded-2xl border shadow-xl text-xs font-mono flex items-center gap-2.5 ${colors[tone] || colors.green}`;
-      toast.innerHTML = `<span class="w-2 h-2 rounded-full bg-current shrink-0"></span><span>${message}</span>`;
+      toast.innerHTML = '<span class="w-2 h-2 rounded-full bg-current shrink-0"></span><span></span>';
+      toast.lastElementChild.textContent = message;
       container.appendChild(toast);
       setTimeout(() => {
         toast.style.opacity = '0';
@@ -1708,6 +1709,11 @@
     // =========================================================================
     // 8. AI MCP SERVER TERMINAL SIMULATOR
     // =========================================================================
+    // Escape text (user input, device names) before it goes into HTML
+    function escapeHtml(text) {
+      return String(text).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+    }
+
     function appendMcpLog(html) {
       const log = document.getElementById('mcpTerminalLog');
       const div = document.createElement('div');
@@ -1721,7 +1727,7 @@
       if (!q) return;
       const lower = q.toLowerCase();
 
-      appendMcpLog(`<div class="text-white"><span class="text-cyan-400">USER &gt;</span> ${q}</div>`);
+      appendMcpLog(`<div class="text-white"><span class="text-cyan-400">USER &gt;</span> ${escapeHtml(q)}</div>`);
 
       // Parse natural language commands and mutate shared reactive state
       if (lower.includes('vlan 20') && (lower.includes('off') || lower.includes('turn off'))) {
@@ -1731,7 +1737,7 @@
         appendMcpLog(`
           <div class="pl-3 border-l-2 border-amber-500/60 text-slate-300 space-y-1">
             <div class="text-amber-300">MCP tools/call &rarr; set_vlan_power({"vlan": 20, "state": "OFF"})</div>
-            <div class="text-emerald-400">OK: Powered OFF ${affected.length} devices on VLAN 20 (${affected.map(d => d.name).join(', ')}).</div>
+            <div class="text-emerald-400">OK: Powered OFF ${affected.length} devices on VLAN 20 (${affected.map(d => escapeHtml(d.name)).join(', ')}).</div>
           </div>
         `);
       } else if (lower.includes('vlan 20') && lower.includes('on')) {
@@ -1759,11 +1765,11 @@
         appendMcpLog(`
           <div class="pl-3 border-l-2 border-cyan-500/60 text-slate-300 space-y-1">
             <div class="text-amber-300">MCP tools/call &rarr; extract_homekit_pin({"ip": "${target.ip}"})</div>
-            <div class="text-cyan-300">RESULT: {"device": "${target.name}", "homekit_pin": "${target.homekitPin}", "mac": "${target.mac}"}</div>
+            <div class="text-cyan-300">RESULT: {"device": "${escapeHtml(target.name)}", "homekit_pin": "${target.homekitPin}", "mac": "${target.mac}"}</div>
           </div>
         `);
       } else if (lower.includes('status') || lower.includes('network') || lower.includes('list')) {
-        const summary = state.devices.map(d => `${d.name} [${d.ip}/VLAN${d.vlan}]: ${d.on ? 'ON' : 'OFF'}`).join('<br/>');
+        const summary = state.devices.map(d => `${escapeHtml(d.name)} [${d.ip}/VLAN${d.vlan}]: ${d.on ? 'ON' : 'OFF'}`).join('<br/>');
         appendMcpLog(`
           <div class="pl-3 border-l-2 border-emerald-500/60 text-slate-300 space-y-1">
             <div class="text-amber-300">MCP tools/call &rarr; get_network_status({})</div>
@@ -1781,7 +1787,7 @@
           appendMcpLog(`
             <div class="pl-3 border-l-2 border-emerald-500/60 text-slate-300 space-y-1">
               <div class="text-amber-300">MCP tools/call &rarr; set_device_state({"ip": "${target.ip}", "state": "${newState ? 'ON' : 'OFF'}"})</div>
-              <div class="text-emerald-400">OK: ${target.name} (${target.ip}) is now ${newState ? 'ON' : 'OFF'}.</div>
+              <div class="text-emerald-400">OK: ${escapeHtml(target.name)} (${target.ip}) is now ${newState ? 'ON' : 'OFF'}.</div>
             </div>
           `);
         } else {
