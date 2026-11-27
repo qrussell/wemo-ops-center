@@ -15,7 +15,8 @@ GitHub issue or PR  →  maintainer applies it on GitLab (primary)  →  merge r
 
 - **The primary repository is on the maintainer's GitLab.** This GitHub repository is a read-only **mirror** of its `main` branch and tags. Anything merged directly on GitHub is overwritten by the next mirror push.
 - **You contribute on GitHub as usual:** open an issue, or a pull request against `main`. The maintainer reviews it here, then carries the change to GitLab as a merge request with you credited as the author (`Co-authored-by`). Your PR is closed with a link to the release that ships it.
-- **Bugs and feature requests:** [GitHub issues](https://github.com/qrussell/wemo-ops-center/issues). Include the app version, edition (desktop app, background service, Docker, HOOBS helper), operating system, and for device problems the Wemo model and firmware version.
+- **Questions, ideas and smart home talk:** [Discussions](https://github.com/qrussell/wemo-ops-center/discussions).
+- **Bugs, feature requests and device reports:** [GitHub issues](https://github.com/qrussell/wemo-ops-center/issues/new/choose), using the forms. Include the app version, edition (desktop app, background service, Docker, HOOBS helper), operating system, and for device problems the Wemo model and firmware version.
 - **Security problems: don't open an issue or PR.** Report privately as described in [SECURITY.md](SECURITY.md).
 
 ## Before you start
@@ -36,6 +37,8 @@ GitHub issue or PR  →  maintainer applies it on GitLab (primary)  →  merge r
 | `universal-app/build_*.sh`, `build_windows.bat`, `wemo_windows.spec`, `Dockerfile` | Packaging |
 | `.github/workflows/` | Release builds (see [RELEASING.md](RELEASING.md)) |
 | `docs/` | Website (GitHub Pages) |
+| `wiki/` | Source of the [GitHub wiki](https://github.com/qrussell/wemo-ops-center/wiki), published on every push to `main`. Edit pages here, not on GitHub |
+| `CHANGELOG.md` | One short entry per release; new changes go under *Unreleased* |
 | `release-notes/` | One file per release |
 | `universal-server/` | Old standalone server, not built. Please don't change it |
 
@@ -70,11 +73,17 @@ for f in universal-app/*.sh; do bash -n "$f"; done
 
 - One topic per PR, with a short description of the problem, the fix and how you tested it. Link the issue (`Fixes #N`).
 - Don't bump `VERSION` or edit `release-notes/`. The maintainer does that when releasing.
+- If your change alters what users see, update the matching page in `wiki/` (and the README if it's mentioned there), and add a line under *Unreleased* in `CHANGELOG.md`.
+- Documentation-only PRs are welcome: fix a page in `wiki/` and open a PR like any other change.
 - Changes to build scripts or workflows need a dry-run release build, which the maintainer runs.
 
 ## AI-assisted contributions
 
 AI-assisted contributions are welcome under the same rules. Please say in the PR that an AI tool helped, review the code yourself before opening it, and make sure the testing you describe actually happened. Agents: see [AGENTS.md](AGENTS.md).
+
+## Code of conduct
+
+Please be kind and patient; see [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ## License
 

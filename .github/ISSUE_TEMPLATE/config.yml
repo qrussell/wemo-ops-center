@@ -1,0 +1,14 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions and help
+    url: https://github.com/qrussell/wemo-ops-center/discussions/categories/q-a
+    about: Ask how to do something, or get help with your setup.
+  - name: Smart home ideas and setups
+    url: https://github.com/qrussell/wemo-ops-center/discussions
+    about: Home Assistant, Homebridge, hubs, VLANs and everything around Wemo.
+  - name: Report a security vulnerability
+    url: https://github.com/qrussell/wemo-ops-center/security/advisories/new
+    about: Please report security problems privately, not as an issue.
+  - name: Documentation
+    url: https://github.com/qrussell/wemo-ops-center/wiki
+    about: Installation, schedules, troubleshooting and FAQ.

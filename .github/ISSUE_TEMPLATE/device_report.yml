@@ -1,0 +1,59 @@
+name: Device report
+description: Tell us how Wemo Ops Center works with your Wemo model and firmware.
+title: "Device report: "
+labels: ["device report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The maintainer only has a few Wemo models, so reports like this decide what goes on the [Supported Devices](https://github.com/qrussell/wemo-ops-center/wiki/Supported-Devices) page. Working reports are as useful as broken ones.
+  - type: input
+    id: model
+    attributes:
+      label: Device model
+      description: Model number on the device, or `modelName` in setup.xml.
+      placeholder: "Wemo Mini Smart Plug F7C063"
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware version
+      description: "[How to find it](https://github.com/qrussell/wemo-ops-center/wiki/Supported-Devices#finding-your-firmware-version)"
+      placeholder: "WeMo_WW_2.00.11565.PVT-OWRT-SNSV2"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Wemo Ops Center version and edition
+      placeholder: "5.6.0, desktop app on Windows 11"
+    validations:
+      required: true
+  - type: checkboxes
+    id: works
+    attributes:
+      label: What works?
+      description: Tick what you tried and it worked.
+      options:
+        - label: Found by Scan
+        - label: On/off from the Dashboard or web app
+        - label: Brightness (Dimmer)
+        - label: Power readings (Insight)
+        - label: Wi-Fi setup with the Provisioner
+        - label: Rename
+        - label: HomeKit code
+        - label: Clock sync
+        - label: Schedules run by Wemo Ops
+        - label: Schedules stored on the device actually switch the device
+        - label: Reset Data / Reset Wi-Fi / Factory Reset
+  - type: textarea
+    id: notworking
+    attributes:
+      label: What didn't work?
+      description: What you tried and what happened. For schedules stored on the device, say how long you waited and whether the device's clock was synced.
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: Was the device ever registered in the Wemo app? Is it on a separate network or VLAN?

@@ -19,7 +19,9 @@ bump version → merge to main → push tag vX.Y.Z → CI builds packages → dr
 | `.github/workflows/release.yml` | push of a `v*` tag | Checks the version, builds all packages, creates/updates a **draft** release with the packages and `SHA256SUMS.txt` |
 | `.github/workflows/release.yml` | manual (Actions → Release Build → Run workflow) | Dry run: builds all packages as downloadable workflow artifacts, no release |
 | `.github/workflows/docker-publish.yml` | a release is **published** (or manual run) | Builds `ghcr.io/qrussell/wemo-ops-server:<version>`; full releases also move `:latest` (pre-releases don't) |
-| `.github/workflows/pypi-publish.yml` | `mcp-v*` tag | Legacy: the MCP server moved to [apiarya/wemo-mcp-server](https://github.com/apiarya/wemo-mcp-server), which publishes it now. Its code is gone from `mcp/`, so don't push `mcp-v*` tags here |
+| `.github/workflows/wiki-sync.yml` | push to `main` that changes `wiki/` (or manual run) | Copies `wiki/` over the GitHub wiki. Edit the wiki only in `wiki/`; edits on GitHub are overwritten. Uses the workflow token, or a `WIKI_TOKEN` secret if set |
+
+The MCP server's PyPI workflow was removed: the MCP server moved to [apiarya/wemo-mcp-server](https://github.com/apiarya/wemo-mcp-server), which publishes it. Don't push `mcp-v*` tags here.
 
 ## Packages built
 
@@ -62,7 +64,9 @@ Ubuntu 22.04/24.04 and Debian 13.
    - `universal-app/Dockerfile`: `org.opencontainers.image.version="X.Y.Z"`
 
    The build scripts read the version from `wemo_ops_universal.py`, so they need no edits.
-   Also update the version badge and tables in `README.md`.
+   Also update the version badge and tables in `README.md`, the version on the wiki's
+   `wiki/Home.md`, any wiki pages whose behaviour changed, and add the version to `CHANGELOG.md`
+   (move the *Unreleased* entries under it).
 
 2. **Write the release notes** in `release-notes/vX.Y.Z.md` (see
    `release-notes/v5.3.1.md` for the format). The draft release uses this file as

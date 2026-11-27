@@ -16,6 +16,7 @@ You are reading the Wemo Ops Center repository. Follow [CONTRIBUTING.md](CONTRIB
 - Read the scope in CONTRIBUTING.md: local-only, no cloud account, not a general smart-home hub. The service on port 5050 has no authentication and is for a trusted LAN; don't expose it beyond the LAN without adding auth.
 - Don't edit `universal-server/` (unbuilt legacy) or untracked leftovers at the top level.
 - Don't bump `VERSION` or write release notes; the maintainer does that at release time.
+- User documentation is in `wiki/` (published to the GitHub wiki from `main`; never edit the GitHub wiki directly). Update the matching page when behaviour changes.
 
 ## Rules for the code
 

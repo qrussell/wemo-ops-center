@@ -1,0 +1,1 @@
+Wemo Ops Center is an independent open-source project, not affiliated with Belkin. This wiki is generated from the [`wiki/` folder](https://github.com/qrussell/wemo-ops-center/tree/main/wiki) of the repository; edits made on GitHub are overwritten. Questions? Ask in [Discussions](https://github.com/qrussell/wemo-ops-center/discussions).

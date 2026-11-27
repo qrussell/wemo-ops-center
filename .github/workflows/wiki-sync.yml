@@ -1,0 +1,56 @@
+# Publishes the wiki/ folder to the GitHub wiki.
+#
+# The wiki's source lives in this repository (edited through GitLab merge
+# requests like any other file); GitHub receives main from the GitLab push
+# mirror and this workflow copies wiki/ over the wiki repository. Edits made in
+# the GitHub wiki editor are overwritten by the next run.
+#
+# Uses the workflow's own token (contents: write). If GitHub refuses the push,
+# add a fine-grained token with Contents read/write on this repository as the
+# WIKI_TOKEN secret; it is used instead.
+name: Publish Wiki
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "wiki/**"
+      - ".github/workflows/wiki-sync.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wiki
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy wiki/ to the GitHub wiki
+        env:
+          TOKEN: ${{ secrets.WIKI_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+          git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" "$RUNNER_TEMP/wiki"
+          cd "$RUNNER_TEMP/wiki"
+          # Replace every page, so pages deleted from wiki/ disappear from the wiki too.
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -R "$GITHUB_WORKSPACE/wiki/." .
+          rm -f README.md
+          # Pages link to each other as Page.md so the links work in the repository;
+          # the wiki wants Page (anchors are kept).
+          find . -name '*.md' -not -path './.git/*' -exec sed -i -E 's/\]\(([A-Za-z0-9_-]+)\.md(#[^)]*)?\)/](\1\2)/g' {} +
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "The wiki is already up to date."
+            exit 0
+          fi
+          git commit -m "Sync wiki from ${GITHUB_SHA::7}"
+          git push origin HEAD
