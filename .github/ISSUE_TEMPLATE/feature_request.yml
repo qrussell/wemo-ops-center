@@ -1,0 +1,40 @@
+name: Feature request
+description: Suggest something Wemo Ops Center should do.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Wemo Ops Center is a local, cloud-free tool for Wemo devices, not a general smart-home hub, and it is maintained by one person. Ideas that fit that are the most likely to happen.
+        Not sure yet? Start a conversation in [Discussions → Ideas](https://github.com/qrussell/wemo-ops-center/discussions/categories/ideas).
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The problem or need, in your own words.
+      placeholder: "I want my porch light to turn off 2 hours after sunset."
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like Wemo Ops Center to do?
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What do you do today instead?
+  - type: dropdown
+    id: edition
+    attributes:
+      label: Where would you use it?
+      multiple: true
+      options:
+        - Desktop app
+        - Mobile web app
+        - Wemo Ops Server / Docker
+        - Homebridge / other integration
+  - type: input
+    id: device
+    attributes:
+      label: Wemo devices involved (model)
+      placeholder: "Wemo Dimmer WDS060"

@@ -1,0 +1,92 @@
+name: Bug report
+description: Something in Wemo Ops Center doesn't work as described.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please check [Troubleshooting](https://github.com/qrussell/wemo-ops-center/wiki/Troubleshooting) and the [open issues](https://github.com/qrussell/wemo-ops-center/issues) first.
+        **Security problems:** don't file them here. Report them privately as described in [SECURITY.md](https://github.com/qrussell/wemo-ops-center/blob/main/SECURITY.md).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+      placeholder: "I clicked Scan on the Dashboard. I expected my 4 plugs to appear, but only 2 did."
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Automation → Run by Wemo Ops
+        2. ...
+  - type: input
+    id: version
+    attributes:
+      label: Wemo Ops Center version
+      description: Shown in the desktop app's title bar, or at the bottom of the web app's Setup page.
+      placeholder: "5.6.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: edition
+    attributes:
+      label: Edition
+      multiple: true
+      options:
+        - Desktop app
+        - Background service (with the desktop app)
+        - Mobile web app
+        - Linux package server (wemo-ops-server service)
+        - Docker image
+        - Homebridge/HOOBS helper
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS 26 (Tahoe)
+        - macOS 15 (Sequoia)
+        - Ubuntu / Debian / Mint
+        - Raspberry Pi OS
+        - Fedora
+        - RHEL / Rocky / AlmaLinux
+        - Other (say below)
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options:
+        - Windows installer
+        - macOS DMG
+        - apt/dnf package repository
+        - .deb/.rpm from the release page
+        - Docker
+        - From source
+  - type: input
+    id: device
+    attributes:
+      label: Wemo device model and firmware (if the problem involves a device)
+      description: "[How to find the firmware](https://github.com/qrussell/wemo-ops-center/wiki/Supported-Devices#finding-your-firmware-version)"
+      placeholder: "Wemo Mini F7C063, WeMo_WW_2.00.11565.PVT-OWRT-SNSV2"
+  - type: textarea
+    id: network
+    attributes:
+      label: Network setup
+      description: Optional. Anything unusual, e.g. devices on a separate VLAN, a VPN, mesh Wi-Fi.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        `server.log` from the [data folder](https://github.com/qrussell/wemo-ops-center/wiki/Troubleshooting#where-the-logs-are), the Provisioner's Live Operation Log, or `docker logs wemo-ops-server`.
+        **Remove Wi-Fi passwords and anything personal first.**
+      render: text

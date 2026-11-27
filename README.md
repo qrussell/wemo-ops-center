@@ -21,6 +21,24 @@ Wemo Ops Center is a completely local, offline provisioning and automation suite
 >
 > v5.5.0 added device clock sync, a Windows build that no longer trips Microsoft Defender's machine-learning check, and a Homebridge installer that no longer hangs ([release notes](release-notes/v5.5.0.md)). v5.4.0 added a remote server option for the desktop app, Insight power readings, a Program Files installer for Windows and 175%/200% UI scaling ([release notes](release-notes/v5.4.0.md)).
 
+**📖 Documentation:** [Wiki](https://github.com/qrussell/wemo-ops-center/wiki) · [Installation](https://github.com/qrussell/wemo-ops-center/wiki/Installation) · [Set up a new device](https://github.com/qrussell/wemo-ops-center/wiki/Provisioning) · [Schedules](https://github.com/qrussell/wemo-ops-center/wiki/Schedules) · [Server & Docker](https://github.com/qrussell/wemo-ops-center/wiki/Wemo-Ops-Server) · [Supported devices](https://github.com/qrussell/wemo-ops-center/wiki/Supported-Devices) · [Troubleshooting](https://github.com/qrussell/wemo-ops-center/wiki/Troubleshooting) · [FAQ](https://github.com/qrussell/wemo-ops-center/wiki/FAQ) · [Changelog](CHANGELOG.md)
+**💬 Community:** [Discussions](https://github.com/qrussell/wemo-ops-center/discussions) for questions, Home Assistant, Homebridge and smart home setups · [Issues](https://github.com/qrussell/wemo-ops-center/issues/new/choose) for bugs and device reports
+
+<details>
+<summary><b>Contents</b></summary>
+
+* [Choose Your Edition](#-choose-your-edition)
+* [Download & Run](#-download--run) · [Windows warning](#️-windows-protected-your-pc-warning) · [First launch on macOS](#-first-launch-on-macos)
+* [Screenshots](#screenshots-of-the-wemo-ops-center-desktop-app)
+* [Key Features](#-key-features)
+* [Option 1: The Desktop App](#️-option-1-the-desktop-app) · [Installation (Linux)](#-installation-linux)
+* [Option 2: The Automation Server](#️-option-2-the-automation-server) · [Docker](#-docker)
+* [Option 3: MCP Server](#-option-3-mcp-server)
+* [Better Together](#-better-together-the-hybrid-approach)
+* [Documentation & Help](#-documentation--help) · [Security](#-security) · [Contributing](#-contributing)
+
+</details>
+
 ## 🚀 Choose Your Edition
 
 | Feature | 🖥️ Desktop App (GUI) | ⚙️ Server App (Headless) | 🤖 MCP Server (AI) |
@@ -177,8 +195,8 @@ The mobile web app is served by the background service (desktop app) or Wemo Ops
 
 ### 3. 🛠️ Maintenance Tools
 Advanced tools to manage device health directly from the app:
-* **Clear Personal Info:** Removes custom names, icons, and rules.
-* **Clear Wi-Fi:** Wipes network credentials to return the device to "Setup Mode" (Flashing Amber/Blue).
+* **Reset Data:** Removes the device's custom name, icon and rules; keeps its Wi-Fi.
+* **Reset Wi-Fi:** Wipes network credentials to return the device to "Setup Mode" (Flashing Amber/Blue).
 * **Factory Reset:** Performs a full "Out of Box" wipe.
 * **Device Clock:** Sets a device's clock and time zone from your computer. Use it when schedules or away mode stored on the device itself (for example, made in the old Wemo app) run at the wrong time. Pick a device in the **Device** list and click **Sync Selected Device**, or click **Sync All Devices**. To keep clocks right, turn on **Settings → Keep device clocks in sync (daily)**.
 
@@ -203,7 +221,8 @@ Choose the device in the **Device** list at the top of the page; all the buttons
 ### 5. 📱 Mobile Web App
 * **Scan the QR Code:** Connect to the mobile web app with your phone or tablet and control your Wemo devices.
 * **Local Control:** The app runs on your local network and connects directly to Wemo devices without the cloud.
-* **Manage Schedules:** Manage schedules from the mobile web app, solar automation, or time-based schedules.
+* **Manage Schedules:** Create and delete fixed-time and sunrise/sunset schedules from your phone.
+* **Add to Home Screen:** Install it on your phone's home screen like an app ([how](https://github.com/qrussell/wemo-ops-center/wiki/Mobile-Web-App#add-it-to-your-home-screen)).
 * **Dimmers and Insight Plugs:** Set brightness with a slider; see an Insight plug's current draw and today's energy use.
 * **Device Clocks:** **Setup → Sync Clocks Now** sets the clock on every device, and **Keep device clocks in sync (daily)** does it once a day.
 * **Remote Server:** Already running Wemo Ops Server on a Raspberry Pi, NAS or in Docker? In the desktop app, go to **Settings → Background Service**, turn off "Use the background service on this computer" and enter the server's address (e.g. `homelab.local:5050`). Schedules, scans and the QR code then use that server. The server has no login: keep it on your home network and don't port-forward it.
@@ -224,7 +243,7 @@ This project is an independent open-source tool and is not affiliated with, endo
 ## 🖥️ Option 1: The Desktop App
 (Recommended for most users)
 
-* **Wemo Ops Center (Desktop)** is a native application that lives on your computer. It allows you to scan your network, toggle devices on/off instantly, and manage device firmware without needing a dedicated server.
+* **Wemo Ops Center (Desktop)** is a native application that lives on your computer. It allows you to scan your network, toggle devices on/off instantly, set up new devices and reset them without needing a dedicated server.
 
 ### Why use this?
 
@@ -314,7 +333,7 @@ Wemo Ops Server is a lightweight, headless service designed to run on a Raspberr
 ### Supported deployments:
 * **Linux package (recommended):** install `wemo-ops` from the [package repository](#-installation-linux). It includes the always-on server as the `wemo-ops-server` systemd service. Open `http://<server-ip>:5050` from any device on your network.
 * **Docker:** see [Docker](#-docker) below.
-* More details: [Wemo Ops Server Wiki Page](https://github.com/qrussell/wemo-ops-center/wiki/Wemo-Ops-Server)
+* More details (settings, data folders, backups, firewall, API): [Wemo Ops Server wiki page](https://github.com/qrussell/wemo-ops-center/wiki/Wemo-Ops-Server) and [Server API](https://github.com/qrussell/wemo-ops-center/wiki/Server-API)
 
 The repository also has a separate, headless-only `wemo-ops-server` package (v1.0.2, from the older standalone server). It does not include the v5.3.x discovery improvements; prefer the `wemo-ops` package or Docker.
 
@@ -387,17 +406,23 @@ See the **[Wemo MCP Server Documentation](https://github.com/apiarya/wemo-mcp-se
 
 * Use the **Server** to handle the "boring stuff": keeping schedules running, monitoring device health, and providing a dashboard for your phone.
 
-* Use the **Desktop App** on your workstation for rapid control while you work, or for deep configuration tasks like firmware updates or bulk provisioning.
+* Use the **Desktop App** on your workstation for rapid control while you work, or for hands-on tasks like setting up new devices, resets and clock sync.
 
 * Use the **MCP Server** with your AI assistant for quick natural language queries and control during development or daily work.
 
 * All applications can run on the same network and control the same devices simultaneously without conflict.
 
+## 📖 Documentation & Help
+* **[Wiki](https://github.com/qrussell/wemo-ops-center/wiki):** [Installation](https://github.com/qrussell/wemo-ops-center/wiki/Installation), [Set Up a New Device](https://github.com/qrussell/wemo-ops-center/wiki/Provisioning), [Desktop App Guide](https://github.com/qrussell/wemo-ops-center/wiki/Wemo-Ops-Center), [Mobile Web App](https://github.com/qrussell/wemo-ops-center/wiki/Mobile-Web-App), [Schedules](https://github.com/qrussell/wemo-ops-center/wiki/Schedules), [Server & Docker](https://github.com/qrussell/wemo-ops-center/wiki/Wemo-Ops-Server), [Smart Home Integrations](https://github.com/qrussell/wemo-ops-center/wiki/Integrations), [Server API](https://github.com/qrussell/wemo-ops-center/wiki/Server-API), [Supported Devices](https://github.com/qrussell/wemo-ops-center/wiki/Supported-Devices), [Troubleshooting](https://github.com/qrussell/wemo-ops-center/wiki/Troubleshooting), [FAQ](https://github.com/qrussell/wemo-ops-center/wiki/FAQ), [Uninstall](https://github.com/qrussell/wemo-ops-center/wiki/Uninstall). The wiki is generated from the [`wiki/`](wiki/) folder.
+* **[Discussions](https://github.com/qrussell/wemo-ops-center/discussions):** questions, ideas, and conversations about Home Assistant, Homebridge, your favourite hub and keeping Wemo devices alive.
+* **[Issues](https://github.com/qrussell/wemo-ops-center/issues/new/choose):** bug reports, feature requests and device reports (does your model and firmware work?).
+* **[Changelog](CHANGELOG.md)** and [release notes](release-notes/). More in [SUPPORT.md](SUPPORT.md).
+
 ## 🔒 Security
 Wemo Ops Center is designed for a trusted home or office network: the background service on port 5050 has no login, so never expose it to the internet. To report a vulnerability privately, see [SECURITY.md](SECURITY.md).
 
 ## 🤝 Contributing
-Issues and pull requests are welcome on GitHub. This repository is a mirror, so accepted changes are carried over to the primary repository by the maintainer. See [CONTRIBUTING.md](CONTRIBUTING.md) (and [AGENTS.md](AGENTS.md) for AI coding agents).
+Issues and pull requests are welcome on GitHub. This repository is a mirror, so accepted changes are carried over to the primary repository by the maintainer. See [CONTRIBUTING.md](CONTRIBUTING.md) (and [AGENTS.md](AGENTS.md) for AI coding agents). Documentation fixes are welcome too: the wiki lives in [`wiki/`](wiki/). Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## 🛠️ For Maintainers
 Releases are built automatically by GitHub Actions. See [RELEASING.md](RELEASING.md).
